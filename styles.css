@@ -1,0 +1,680 @@
+/* ── Container ──────────────────────────────────────────────── */
+.paperclip-container {
+	padding: 8px;
+	font-size: var(--font-ui-small);
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.paperclip-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.paperclip-company-select {
+	flex: 1 1 auto;
+	min-width: 120px;
+}
+
+.paperclip-tabs {
+	display: flex;
+	gap: 2px;
+}
+
+.paperclip-tab {
+	padding: 4px 10px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.paperclip-tab.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.paperclip-header-actions {
+	display: flex;
+	gap: 2px;
+	margin-left: auto;
+}
+
+/* ── Issue list ─────────────────────────────────────────────── */
+.paperclip-issue-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.paperclip-issue-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	transition: background 0.1s;
+}
+
+.paperclip-issue-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.paperclip-issue-left {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	overflow: hidden;
+	flex: 1;
+	min-width: 0;
+}
+
+.paperclip-issue-id {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.paperclip-project-header {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 10px 8px 4px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-top: 4px;
+}
+
+.paperclip-project-header:first-child {
+	margin-top: 0;
+}
+
+.paperclip-collapsible {
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	user-select: none;
+}
+
+.paperclip-collapsible:hover {
+	color: var(--text-normal);
+}
+
+.paperclip-collapse-icon {
+	display: inline-flex;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+.paperclip-collapse-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.paperclip-collapsible.is-collapsed {
+	margin-bottom: 0;
+	border-bottom-color: transparent;
+}
+
+.paperclip-issue-project {
+	font-size: 10px;
+	color: var(--text-faint);
+	background: var(--background-modifier-border);
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+	white-space: nowrap;
+}
+
+.paperclip-issue-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.paperclip-issue-right {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	margin-left: 8px;
+}
+
+/* ── Status badges ───────────────────────────────────────────── */
+.paperclip-status {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	white-space: nowrap;
+}
+
+.paperclip-status-todo { background: var(--background-modifier-border); }
+.paperclip-status-backlog { background: var(--background-modifier-border); color: var(--text-muted); }
+.paperclip-status-in_progress { background: var(--color-blue); color: #fff; }
+.paperclip-status-in_review { background: var(--color-purple); color: #fff; }
+.paperclip-status-blocked { background: var(--color-red); color: #fff; }
+.paperclip-status-done { background: var(--color-green); color: #fff; }
+.paperclip-status-cancelled { background: var(--background-modifier-border); color: var(--text-muted); text-decoration: line-through; }
+
+.paperclip-status-clickable {
+	cursor: pointer;
+}
+
+.paperclip-status-clickable:hover {
+	filter: brightness(1.15);
+}
+
+/* ── Priority icons ─────────────────────────────────────────── */
+.paperclip-priority {
+	display: inline-flex;
+	align-items: center;
+	width: 16px;
+	height: 16px;
+}
+
+.paperclip-priority svg {
+	width: 14px;
+	height: 14px;
+}
+
+.paperclip-priority-critical { color: var(--color-red); }
+.paperclip-priority-high { color: var(--color-orange); }
+.paperclip-priority-medium { color: var(--text-muted); }
+.paperclip-priority-low { color: var(--text-faint); }
+
+.paperclip-assignee {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+/* ── Detail view ──────────────────────────────────────────── */
+.paperclip-detail-nav {
+	margin-bottom: 10px;
+	padding: 6px 0 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.paperclip-back {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--text-accent);
+	padding: 6px 10px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+}
+
+.paperclip-back:hover {
+	background: var(--background-modifier-hover);
+}
+
+.paperclip-detail-header h3 {
+	margin: 0 0 6px 0;
+}
+
+.paperclip-title-editable {
+	cursor: pointer;
+	border-bottom: 1px dashed transparent;
+	transition: border-color 0.15s;
+}
+
+.paperclip-title-editable:hover {
+	border-bottom-color: var(--text-muted);
+}
+
+.paperclip-title-input {
+	width: 100%;
+	font-size: inherit;
+	font-weight: inherit;
+	font-family: inherit;
+	background: var(--background-modifier-form-field);
+	border: 1px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	padding: 2px 6px;
+	outline: none;
+}
+
+.paperclip-detail-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+}
+
+.paperclip-detail-props {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 12px;
+	padding: 8px;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+}
+
+.paperclip-prop-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.paperclip-prop-label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	min-width: 60px;
+	flex-shrink: 0;
+}
+
+.paperclip-assignee-chip {
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.paperclip-assignee-chip:hover {
+	background: var(--background-modifier-hover);
+}
+
+.paperclip-assign-me {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	padding: 2px 6px;
+	border-radius: var(--radius-s);
+}
+
+.paperclip-assign-me:hover {
+	background: var(--background-modifier-hover);
+}
+
+.paperclip-vault-link {
+	cursor: pointer;
+	color: var(--text-accent) !important;
+	text-decoration: underline;
+	text-decoration-style: dotted;
+}
+
+.paperclip-vault-link:hover {
+	text-decoration-style: solid;
+}
+
+.paperclip-description {
+	margin-bottom: 12px;
+	padding: 8px;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+}
+
+.paperclip-actions {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 16px;
+}
+
+/* ── Activity / Comments ────────────────────────────────────── */
+.paperclip-comments h4 {
+	margin: 0 0 8px 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.paperclip-comment {
+	padding: 10px 10px 10px 12px;
+	margin-bottom: 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	border-left: 3px solid var(--background-modifier-border);
+}
+
+.paperclip-comment.is-agent {
+	border-left-color: var(--interactive-accent);
+}
+
+.paperclip-comment.is-user {
+	border-left-color: var(--color-green);
+}
+
+.paperclip-comment-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.paperclip-comment-avatar {
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	font-size: 10px;
+	font-weight: var(--font-semibold);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	color: #fff;
+}
+
+.paperclip-comment-avatar.is-agent {
+	background: var(--interactive-accent);
+}
+
+.paperclip-comment-avatar.is-user {
+	background: var(--color-green);
+}
+
+.paperclip-comment-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+
+.paperclip-comment-author {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.paperclip-comment.is-agent .paperclip-comment-author {
+	color: var(--interactive-accent);
+}
+
+.paperclip-comment.is-user .paperclip-comment-author {
+	color: var(--color-green);
+}
+
+.paperclip-comment-date {
+	font-size: 10px;
+	color: var(--text-faint);
+	margin-left: auto;
+	white-space: nowrap;
+}
+
+.paperclip-comment-body {
+	font-size: var(--font-ui-small);
+	padding-left: 32px;
+}
+
+/* ── Active run banner (detail view) ─────────────────────────── */
+.paperclip-run-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	margin-bottom: 10px;
+	border-radius: var(--radius-s);
+	background: color-mix(in srgb, var(--color-blue) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-blue) 30%, transparent);
+}
+
+.paperclip-run-banner-text {
+	font-size: var(--font-ui-small);
+	color: var(--color-blue);
+	font-weight: var(--font-semibold);
+}
+
+/* ── Running indicator (list view) ──────────────────────────── */
+.paperclip-issue-row.is-running {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--color-blue);
+}
+
+.paperclip-running-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--color-blue);
+	flex-shrink: 0;
+	animation: paperclip-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes paperclip-pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+.paperclip-running-label {
+	font-size: 10px;
+	color: var(--color-blue);
+	font-style: italic;
+	white-space: nowrap;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.paperclip-empty {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 24px 0;
+}
+
+/* ── Create issue modal ───────────────────────────────────── */
+.paperclip-create-modal .setting-item {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.paperclip-create-modal .setting-item-info {
+	padding-right: 0;
+}
+
+.paperclip-create-modal .setting-item-control {
+	width: 100%;
+}
+
+.paperclip-create-modal .setting-item-control input[type="text"],
+.paperclip-create-modal .setting-item-control select {
+	width: 100%;
+}
+
+.paperclip-create-modal .setting-item-control textarea {
+	width: 100%;
+	min-height: 150px;
+}
+
+/* ── Comment modal ────────────────────────────────────────── */
+.paperclip-comment-textarea {
+	width: 100%;
+	min-height: 120px;
+}
+
+.paperclip-mention-hint {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 8px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.paperclip-mention-chip {
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	border: none;
+	cursor: pointer;
+	font-size: 11px;
+}
+
+.paperclip-mention-chip:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.paperclip-create-option {
+	color: var(--text-accent);
+	font-style: italic;
+}
+
+/* ── Kanban board ───────────────────────────────────────────── */
+.kb-board {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	padding-bottom: 8px;
+	min-height: 300px;
+	align-items: flex-start;
+}
+
+.kb-col {
+	flex: 0 0 200px;
+	min-width: 160px;
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100vh - 140px);
+}
+
+.kb-col-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 8px;
+	margin-bottom: 4px;
+	border-bottom: 2px solid var(--background-modifier-border);
+}
+
+.kb-col-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--text-muted);
+}
+
+.kb-col-count {
+	font-size: 10px;
+	color: var(--text-faint);
+	background: var(--background-modifier-border);
+	padding: 0 5px;
+	border-radius: 8px;
+}
+
+.kb-col-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 40px;
+	padding: 2px;
+	border-radius: var(--radius-s);
+	overflow-y: auto;
+	transition: background 0.15s;
+}
+
+.kb-col-body.kb-drag-over {
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	outline: 2px dashed var(--interactive-accent);
+	outline-offset: -2px;
+}
+
+/* ── Kanban card ────────────────────────────────────────────── */
+.kb-card {
+	padding: 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	cursor: grab;
+	transition: box-shadow 0.15s, opacity 0.15s;
+}
+
+.kb-card:hover {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.kb-card.is-running {
+	border-left: 3px solid var(--color-blue);
+}
+
+.kb-card.kb-dragging {
+	opacity: 0.4;
+	cursor: grabbing;
+}
+
+.kb-card-top {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+.kb-card-id {
+	font-family: var(--font-monospace);
+	font-size: 10px;
+	color: var(--text-muted);
+}
+
+.kb-card-title {
+	font-size: var(--font-ui-small);
+	line-height: 1.3;
+	margin-bottom: 4px;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.kb-card-project {
+	font-size: 10px;
+	color: var(--text-faint);
+	margin-bottom: 4px;
+}
+
+.kb-card-bottom {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px;
+	min-height: 20px;
+}
+
+/* ── Contributor avatars ────────────────────────────────────── */
+.kb-avatars {
+	display: flex;
+	gap: 0;
+}
+
+.kb-avatar {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 9px;
+	font-weight: var(--font-semibold);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-left: -4px;
+	border: 2px solid var(--background-secondary);
+	cursor: default;
+}
+
+.kb-avatar:first-child {
+	margin-left: 0;
+}
+
+.kb-avatar-more {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: 8px;
+}
