@@ -78,6 +78,7 @@ export interface IssueFilters {
 	status?: string;
 	assigneeAgentId?: string;
 	projectId?: string;
+	q?: string;
 }
 
 export interface CreateIssueData {
@@ -167,6 +168,7 @@ export class PaperclipApi {
 		if (filters?.assigneeAgentId)
 			params.set("assigneeAgentId", filters.assigneeAgentId);
 		if (filters?.projectId) params.set("projectId", filters.projectId);
+		if (filters?.q) params.set("q", filters.q);
 		const qs = params.toString();
 		const path = `/api/companies/${companyId}/issues${qs ? `?${qs}` : ""}`;
 		return this.request<Issue[]>("GET", path);

@@ -43,7 +43,7 @@ export class AssignModal extends SuggestModal<AgentOption> {
 		el.createDiv({ text: item.display });
 	}
 
-	async onChooseSuggestion(item: AgentOption): Promise<void> {
-		await this.onChoose(item.agent, item.special);
+	onChooseSuggestion(item: AgentOption): void {
+		void this.onChoose(item.agent, item.special);
 	}
 }

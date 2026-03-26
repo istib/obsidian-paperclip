@@ -87,17 +87,18 @@ export class CommentModal extends Modal {
 		// Submit
 		new Setting(contentEl).addButton((btn) =>
 			btn
-				.setButtonText("Post Comment")
+				.setButtonText("Post comment")
 				.setCta()
-				.onClick(async () => {
+				.onClick(() => {
 					if (!this.body.trim()) return;
 					btn.setDisabled(true);
 					btn.setButtonText("Posting…");
-					await this.onSubmit({
+					void this.onSubmit({
 						body: this.body,
 						assignAgentId: this.selectedAgentId || undefined,
+					}).then(() => {
+						this.close();
 					});
-					this.close();
 				}),
 		);
 	}

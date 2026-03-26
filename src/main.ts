@@ -27,20 +27,20 @@ export default class PaperclipPlugin extends Plugin {
 
 		// Ribbon icon
 		this.addRibbonIcon("paperclip", "Open Paperclip", () => {
-			this.activateView();
+			void this.activateView();
 		});
 
 		// Commands
 		this.addCommand({
-			id: "open-paperclip",
+			id: "open-issue-browser",
 			name: "Open issue browser",
-			callback: () => this.activateView(),
+			callback: () => { void this.activateView(); },
 		});
 
 		this.addCommand({
 			id: "create-issue",
 			name: "Create issue",
-			callback: () => this.openCreateIssue(),
+			callback: () => { void this.openCreateIssue(); },
 		});
 
 		this.addCommand({
@@ -48,7 +48,7 @@ export default class PaperclipPlugin extends Plugin {
 			name: "Work on this document (AI)",
 			checkCallback: (checking) => {
 				if (!this.app.workspace.getActiveFile()) return false;
-				if (!checking) this.createIssueWithAI("", "work");
+				if (!checking) void this.createIssueWithAI("", "work");
 				return true;
 			},
 		});
@@ -58,7 +58,7 @@ export default class PaperclipPlugin extends Plugin {
 			name: "Review this document (AI)",
 			checkCallback: (checking) => {
 				if (!this.app.workspace.getActiveFile()) return false;
-				if (!checking) this.createIssueWithAI("", "review");
+				if (!checking) void this.createIssueWithAI("", "review");
 				return true;
 			},
 		});
@@ -68,7 +68,7 @@ export default class PaperclipPlugin extends Plugin {
 			name: "Smart action (AI)",
 			editorCallback: (editor) => {
 				const sel = editor.getSelection()?.trim() || "";
-				this.createIssueWithAI(sel, "auto");
+				void this.createIssueWithAI(sel, "auto");
 			},
 		});
 
@@ -83,18 +83,18 @@ export default class PaperclipPlugin extends Plugin {
 					menu.addItem((item) => {
 						item.setTitle("📎 Create issue from selection")
 							.setIcon("paperclip")
-							.onClick(() => this.createIssueWithAI(sel, "work"));
+							.onClick(() => { void this.createIssueWithAI(sel, "work"); });
 					});
 				} else {
 					menu.addItem((item) => {
 						item.setTitle("📎 Work on this document")
 							.setIcon("paperclip")
-							.onClick(() => this.createIssueWithAI("", "work"));
+							.onClick(() => { void this.createIssueWithAI("", "work"); });
 					});
 					menu.addItem((item) => {
 						item.setTitle("📎 Review this document")
 							.setIcon("eye")
-							.onClick(() => this.createIssueWithAI("", "review"));
+							.onClick(() => { void this.createIssueWithAI("", "review"); });
 					});
 				}
 			}),
@@ -105,7 +105,7 @@ export default class PaperclipPlugin extends Plugin {
 	}
 
 	onunload(): void {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+		// View cleanup is handled by Obsidian automatically
 	}
 
 	async loadSettings(): Promise<void> {
@@ -195,9 +195,9 @@ export default class PaperclipPlugin extends Plugin {
 			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
 			if (leaves.length > 0) {
 				const view = leaves[0].view as PaperclipView;
-				agents = (view as any).agents ?? [];
-				projects = (view as any).projects ?? [];
-				companyId = (view as any).selectedCompanyId ?? "";
+				agents = view.getAgents();
+				projects = view.getProjects();
+				companyId = view.getSelectedCompanyId();
 			}
 			if (!companyId) {
 				const companies = await this.api.listCompanies();

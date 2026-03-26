@@ -460,6 +460,59 @@
 	white-space: nowrap;
 }
 
+/* ── Related issues ─────────────────────────────────────────── */
+.paperclip-related {
+	margin-bottom: 8px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.paperclip-related-header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	user-select: none;
+	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
+
+.paperclip-related-header:hover {
+	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.paperclip-related-icon {
+	display: inline-flex;
+	width: 14px;
+	height: 14px;
+	color: var(--interactive-accent);
+	flex-shrink: 0;
+}
+
+.paperclip-related-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.paperclip-related-name {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--interactive-accent);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.paperclip-related-count {
+	font-size: 10px;
+	color: var(--text-on-accent);
+	background: var(--interactive-accent);
+	padding: 0 5px;
+	border-radius: 8px;
+	margin-left: auto;
+}
+
 /* ── Empty state ────────────────────────────────────────────── */
 .paperclip-empty {
 	text-align: center;

@@ -68,12 +68,13 @@ export class ProjectModal extends SuggestModal<ProjectOption> {
 		}
 	}
 
-	async onChooseSuggestion(item: ProjectOption): Promise<void> {
+	onChooseSuggestion(item: ProjectOption): void {
 		if (item.isCreate && item.createName && this.onCreate) {
-			const newProject = await this.onCreate(item.createName);
-			await this.onChoose(newProject);
+			void this.onCreate(item.createName).then((newProject) => {
+				void this.onChoose(newProject);
+			});
 		} else {
-			await this.onChoose(item.project);
+			void this.onChoose(item.project);
 		}
 	}
 }

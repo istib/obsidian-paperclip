@@ -1,6 +1,6 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer } from "obsidian";
+import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer, TFile } from "obsidian";
 import type PaperclipPlugin from "../main";
-import type { Company, Issue, Agent, Comment, ActiveRun, Project } from "../api";
+import type { Company, Issue, Agent, Comment, ActiveRun, Project, CreateIssueData } from "../api";
 import { CommentModal } from "./CommentModal";
 import { AssignModal, ASSIGN_TO_ME } from "./AssignModal";
 import { CreateIssueModal } from "./CreateIssueModal";
@@ -43,11 +43,20 @@ export class PaperclipView extends ItemView {
 	private contributors: Map<string, string[]> = new Map();
 	/** Track collapsed section groups in list view */
 	private collapsedGroups: Set<string> = new Set();
+	/** Issues related to the currently active file */
+	private relatedIssues: Issue[] = [];
+	/** Path of the file whose related issues are currently loaded */
+	private relatedFilePath: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PaperclipPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
+
+	// Public accessors for main.ts AI features
+	getAgents(): Agent[] { return this.agents; }
+	getProjects(): Project[] { return this.projects; }
+	getSelectedCompanyId(): string { return this.selectedCompanyId; }
 
 	getViewType(): string {
 		return VIEW_TYPE;
@@ -65,9 +74,18 @@ export class PaperclipView extends ItemView {
 		await this.loadCompanies();
 		this.render();
 		this.startAutoRefresh();
+
+	// Track active file changes for related issues
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", () => {
+				void this.onActiveFileChange();
+			}),
+		);
+		// Trigger initial check
+		void this.onActiveFileChange();
 	}
 
-	async onClose(): Promise<void> {
+	onClose(): void {
 		this.stopAutoRefresh();
 	}
 
@@ -142,6 +160,40 @@ export class PaperclipView extends ItemView {
 		}
 	}
 
+	private async onActiveFileChange(): Promise<void> {
+		const file = this.app.workspace.getActiveFile();
+		const path = file?.path ?? null;
+		if (path === this.relatedFilePath) return;
+		this.relatedFilePath = path;
+		if (!path || !this.selectedCompanyId) {
+			this.relatedIssues = [];
+			this.render();
+			return;
+		}
+		await this.loadRelatedIssues(path);
+		this.render();
+	}
+
+	private async loadRelatedIssues(filePath: string): Promise<void> {
+		// Extract meaningful search terms from the file path
+		const basename = filePath.split("/").pop() ?? filePath;
+		const name = basename.replace(/\.[^.]+$/, ""); // strip extension
+		if (!name || name.length < 3) {
+			this.relatedIssues = [];
+			return;
+		}
+		try {
+			const results = await this.plugin.api.listIssues(
+				this.selectedCompanyId,
+				{ q: name },
+			);
+			// Exclude issues already visible in main list to avoid duplication confusion
+			this.relatedIssues = results;
+		} catch {
+			this.relatedIssues = [];
+		}
+	}
+
 	private async loadComments(issueId: string): Promise<void> {
 		try {
 			this.comments = await this.plugin.api.listComments(issueId);
@@ -169,7 +221,7 @@ export class PaperclipView extends ItemView {
 	/** Load comment authors for all current issues (fire-and-forget, re-renders when done) */
 	private loadContributors(): void {
 		const ids = this.issues.map((i) => i.id);
-		Promise.all(
+		void Promise.all(
 			ids.map(async (id) => {
 				try {
 					const comments = await this.plugin.api.listComments(id);
@@ -281,7 +333,8 @@ export class PaperclipView extends ItemView {
 			this.renderHeader(container);
 			this.renderKanban(container);
 		} else {
-			this.renderHeader(container);
+		this.renderHeader(container);
+			this.renderRelatedIssues(container);
 			this.renderListBody(container);
 		}
 	}
@@ -298,14 +351,14 @@ export class PaperclipView extends ItemView {
 			opt.value = c.id;
 			if (c.id === this.selectedCompanyId) opt.selected = true;
 		}
-		select.addEventListener("change", async () => {
+		select.addEventListener("change", () => {
 			this.selectedCompanyId = select.value;
 			this.selectedProjectId = "";
 			this.selectedIssue = null;
-			await this.loadAgents();
-			await this.loadProjects();
-			await this.loadIssues();
-			this.render();
+			void this.loadAgents()
+				.then(() => this.loadProjects())
+				.then(() => this.loadIssues())
+				.then(() => this.render());
 		});
 
 		// Project filter
@@ -321,10 +374,9 @@ export class PaperclipView extends ItemView {
 				opt.value = p.id;
 				if (p.id === this.selectedProjectId) opt.selected = true;
 			}
-			projSelect.addEventListener("change", async () => {
+			projSelect.addEventListener("change", () => {
 				this.selectedProjectId = projSelect.value;
-				await this.loadIssues();
-				this.render();
+				void this.loadIssues().then(() => this.render());
 			});
 		}
 
@@ -341,10 +393,9 @@ export class PaperclipView extends ItemView {
 					text: f.label,
 					cls: `paperclip-tab${this.statusFilter === f.value ? " is-active" : ""}`,
 				});
-				tab.addEventListener("click", async () => {
+				tab.addEventListener("click", () => {
 					this.statusFilter = f.value;
-					await this.loadIssues();
-					this.render();
+					void this.loadIssues().then(() => this.render());
 				});
 			}
 
@@ -376,15 +427,18 @@ export class PaperclipView extends ItemView {
 			attr: { "aria-label": this.viewMode === "list" ? "Kanban view" : "List view" },
 		});
 		setIcon(toggleBtn, this.viewMode === "list" ? "kanban" : "list");
-		toggleBtn.addEventListener("click", async () => {
+		toggleBtn.addEventListener("click", () => {
 			this.viewMode = this.viewMode === "list" ? "kanban" : "list";
 			if (this.viewMode === "kanban") {
 				// Kanban always shows all statuses
 				this.statusFilter = "all";
-				await this.loadIssues();
-				this.loadContributors();
+				void this.loadIssues().then(() => {
+					this.loadContributors();
+					this.render();
+				});
+			} else {
+				this.render();
 			}
-			this.render();
 		});
 
 		// New issue button
@@ -403,12 +457,53 @@ export class PaperclipView extends ItemView {
 			attr: { "aria-label": "Refresh" },
 		});
 		setIcon(refreshBtn, "refresh-cw");
-		refreshBtn.addEventListener("click", async () => {
-			await this.loadIssues();
-			if (this.viewMode === "kanban") this.loadContributors();
-			this.render();
-			new Notice("Paperclip: refreshed");
+		refreshBtn.addEventListener("click", () => {
+			void this.loadIssues().then(() => {
+				if (this.viewMode === "kanban") this.loadContributors();
+				this.render();
+				new Notice("Paperclip: refreshed");
+			});
 		});
+	}
+
+	private renderRelatedIssues(container: HTMLElement): void {
+		if (this.relatedIssues.length === 0 || !this.relatedFilePath) return;
+
+		const basename = this.relatedFilePath.split("/").pop() ?? this.relatedFilePath;
+		const name = basename.replace(/\.[^.]+$/, "");
+
+		const section = container.createDiv({ cls: "paperclip-related" });
+		const groupKey = "related:file";
+		const collapsed = this.collapsedGroups.has(groupKey);
+
+		const header = section.createDiv({
+			cls: `paperclip-related-header paperclip-collapsible${collapsed ? " is-collapsed" : ""}`,
+		});
+		const chevron = header.createSpan({ cls: "paperclip-collapse-icon" });
+		setIcon(chevron, collapsed ? "chevron-right" : "chevron-down");
+		const icon = header.createSpan({ cls: "paperclip-related-icon" });
+		setIcon(icon, "file-text");
+		header.createSpan({ text: `${name}`, cls: "paperclip-related-name" });
+		header.createSpan({
+			text: `${this.relatedIssues.length}`,
+			cls: "paperclip-related-count",
+		});
+
+		header.addEventListener("click", () => {
+			if (this.collapsedGroups.has(groupKey)) {
+				this.collapsedGroups.delete(groupKey);
+			} else {
+				this.collapsedGroups.add(groupKey);
+			}
+			this.render();
+		});
+
+		if (!collapsed) {
+			const list = section.createDiv({ cls: "paperclip-issue-list" });
+			for (const issue of this.relatedIssues) {
+				this.renderIssueRow(list, issue);
+			}
+		}
 	}
 
 	private renderListBody(container: HTMLElement): void {
@@ -517,10 +612,9 @@ export class PaperclipView extends ItemView {
 			issue.activeRun?.status === "running";
 		const rowCls = `paperclip-issue-row${isRunning ? " is-running" : ""}`;
 		const row = container.createDiv({ cls: rowCls });
-		row.addEventListener("click", async () => {
+		row.addEventListener("click", () => {
 			this.selectedIssue = issue;
-			await this.loadComments(issue.id);
-			this.render();
+			void this.loadComments(issue.id).then(() => this.render());
 		});
 
 		const left = row.createDiv({ cls: "paperclip-issue-left" });
@@ -603,21 +697,20 @@ export class PaperclipView extends ItemView {
 			colBody.addEventListener("dragleave", () => {
 				colBody.removeClass("kb-drag-over");
 			});
-			colBody.addEventListener("drop", async (e) => {
+		colBody.addEventListener("drop", (e) => {
 				e.preventDefault();
 				colBody.removeClass("kb-drag-over");
 				const issueId = e.dataTransfer?.getData("text/plain");
 				if (!issueId) return;
 				const issue = this.issues.find((i) => i.id === issueId);
 				if (!issue || issue.status === status) return;
-				try {
-					await this.plugin.api.updateIssue(issueId, { status });
+				void this.plugin.api.updateIssue(issueId, { status }).then(() => {
 					issue.status = status;
 					new Notice(`${issue.identifier} → ${status.replace("_", " ")}`);
 					this.render();
-				} catch (err) {
+				}).catch((err: unknown) => {
 					new Notice(`Failed: ${err}`);
-				}
+				});
 			});
 
 			// Cards
@@ -646,10 +739,9 @@ export class PaperclipView extends ItemView {
 		});
 
 		// Click to open detail
-		card.addEventListener("click", async () => {
+		card.addEventListener("click", () => {
 			this.selectedIssue = issue;
-			await this.loadComments(issue.id);
-			this.render();
+			void this.loadComments(issue.id).then(() => this.render());
 		});
 
 		// Card top row: identifier + priority
@@ -825,7 +917,7 @@ export class PaperclipView extends ItemView {
 		// Action buttons
 		const actions = container.createDiv({ cls: "paperclip-actions" });
 		const commentBtn = actions.createEl("button", {
-			text: "Add Comment",
+			text: "Add comment",
 			cls: "mod-cta",
 		});
 		commentBtn.addEventListener("click", () => {
@@ -943,38 +1035,37 @@ export class PaperclipView extends ItemView {
 		input.addEventListener("keydown", (e) => {
 			if (e.key === "Enter") {
 				e.preventDefault();
-				save();
+				void save();
 			} else if (e.key === "Escape") {
 				this.render();
 			}
 		});
-		input.addEventListener("blur", save);
+		input.addEventListener("blur", () => { void save(); });
 	}
 
 	// ── Modal helpers ──────────────────────────────────────────────────
 
 	private openCommentModal(issue: Issue): void {
-		new CommentModal(this.app, issue, this.agents, async (result) => {
-			try {
-				if (result.assignAgentId) {
-					// Single PATCH call: assign + comment together
-					await this.plugin.api.updateIssue(issue.id, {
+		new CommentModal(this.app, issue, this.agents, (result) => {
+			const action = result.assignAgentId
+				? this.plugin.api.updateIssue(issue.id, {
 						assigneeAgentId: result.assignAgentId,
 						assigneeUserId: null,
 						comment: result.body,
+					}).then(() => {
+						issue.assigneeAgentId = result.assignAgentId ?? null;
+						const agentName = this.agentName(result.assignAgentId ?? null);
+						new Notice(`Comment posted & assigned to ${agentName}`);
+					})
+				: this.plugin.api.addComment(issue.id, result.body).then(() => {
+						new Notice("Comment posted");
 					});
-					issue.assigneeAgentId = result.assignAgentId;
-					const agentName = this.agentName(result.assignAgentId);
-					new Notice(`Comment posted & assigned to ${agentName}`);
-				} else {
-					await this.plugin.api.addComment(issue.id, result.body);
-					new Notice("Comment posted");
-				}
-				await this.loadComments(issue.id);
-				this.render();
-			} catch (e) {
-				new Notice(`Failed: ${e}`);
-			}
+			void action
+				.then(() => this.loadComments(issue.id))
+				.then(() => this.render())
+				.catch((e: unknown) => {
+					new Notice(`Failed: ${e}`);
+				});
 		}).open();
 	}
 
@@ -1006,7 +1097,7 @@ export class PaperclipView extends ItemView {
 					}
 					const created = await this.plugin.api.createIssue(
 						this.selectedCompanyId,
-						data as any,
+						data as CreateIssueData,
 					);
 					if (result.assignToMe) {
 						await this.plugin.api.updateIssue(created.id, {
@@ -1024,24 +1115,24 @@ export class PaperclipView extends ItemView {
 	}
 
 	private openPriorityMenu(issue: Issue, anchor: HTMLElement): void {
-		const menu = new (require("obsidian") as typeof import("obsidian")).Menu();
+		const menu = new Menu();
 		const priorities = ["critical", "high", "medium", "low"];
+		const labels: Record<string, string> = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
 		for (const p of priorities) {
 			menu.addItem((item) => {
-				item.setTitle(p)
+				item.setTitle(labels[p])
 					.setChecked(issue.priority === p)
-					.onClick(async () => {
+					.onClick(() => {
 						if (issue.priority === p) return;
-						try {
-							await this.plugin.api.updateIssue(issue.id, {
-								priority: p,
-							});
+						void this.plugin.api.updateIssue(issue.id, {
+							priority: p,
+						}).then(() => {
 							issue.priority = p;
-							new Notice(`Priority → ${p}`);
+							new Notice(`Priority → ${labels[p]}`);
 							this.render();
-						} catch (e) {
+						}).catch((e: unknown) => {
 							new Notice(`Failed: ${e}`);
-						}
+						});
 					});
 			});
 		}
@@ -1050,7 +1141,7 @@ export class PaperclipView extends ItemView {
 	}
 
 	private openStatusMenu(issue: Issue, anchor: HTMLElement): void {
-		const menu = new (require("obsidian") as typeof import("obsidian")).Menu();
+		const menu = new Menu();
 		const statuses = [
 			"backlog",
 			"todo",
@@ -1060,22 +1151,25 @@ export class PaperclipView extends ItemView {
 			"done",
 			"cancelled",
 		];
+		const statusLabel = (s: string) => {
+			const words = s.split("_");
+			return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? " " + words.slice(1).join(" ") : "");
+		};
 		for (const s of statuses) {
 			menu.addItem((item) => {
-				item.setTitle(s.replace("_", " "))
+				item.setTitle(statusLabel(s))
 					.setChecked(issue.status === s)
-					.onClick(async () => {
+					.onClick(() => {
 						if (issue.status === s) return;
-						try {
-							await this.plugin.api.updateIssue(issue.id, {
-								status: s,
-							});
+						void this.plugin.api.updateIssue(issue.id, {
+							status: s,
+						}).then(() => {
 							issue.status = s;
-							new Notice(`Status → ${s.replace("_", " ")}`);
+							new Notice(`Status → ${statusLabel(s)}`);
 							this.render();
-						} catch (e) {
+						}).catch((e: unknown) => {
 							new Notice(`Failed: ${e}`);
-						}
+						});
 					});
 			});
 		}
@@ -1087,12 +1181,11 @@ export class PaperclipView extends ItemView {
 		new ProjectModal(
 			this.app,
 			this.projects,
-			async (project) => {
-				try {
-					await this.plugin.api.updateIssue(issue.id, {
-						projectId: project?.id ?? null,
-						projectWorkspaceId: null,
-					});
+			(project) => {
+				void this.plugin.api.updateIssue(issue.id, {
+					projectId: project?.id ?? null,
+					projectWorkspaceId: null,
+				}).then(() => {
 					issue.projectId = project?.id ?? null;
 					new Notice(
 						project
@@ -1100,9 +1193,9 @@ export class PaperclipView extends ItemView {
 							: "Project removed",
 					);
 					this.render();
-				} catch (e) {
+				}).catch((e: unknown) => {
 					new Notice(`Failed to set project: ${e}`);
-				}
+				});
 			},
 			async (name) => {
 				const p = await this.plugin.api.createProject(
@@ -1116,38 +1209,38 @@ export class PaperclipView extends ItemView {
 	}
 
 	private openAssignModal(issue: Issue): void {
-		new AssignModal(this.app, this.agents, async (agent, special) => {
-			try {
-				if (special === ASSIGN_TO_ME) {
-					await this.plugin.api.updateIssue(issue.id, {
+		new AssignModal(this.app, this.agents, (agent, special) => {
+			const doAssign = special === ASSIGN_TO_ME
+				? this.plugin.api.updateIssue(issue.id, {
 						assigneeAgentId: null,
 						assigneeUserId: "local-board",
-					});
-					issue.assigneeAgentId = null;
-					issue.assigneeUserId = "local-board";
-					new Notice("Assigned to you");
-				} else {
-					await this.plugin.api.updateIssue(issue.id, {
+					}).then(() => {
+						issue.assigneeAgentId = null;
+						issue.assigneeUserId = "local-board";
+						new Notice("Assigned to you");
+					})
+				: this.plugin.api.updateIssue(issue.id, {
 						assigneeAgentId: agent?.id ?? null,
 						assigneeUserId: null,
+					}).then(() => {
+						issue.assigneeAgentId = agent?.id ?? null;
+						issue.assigneeUserId = null;
+						new Notice(
+							agent
+								? `Assigned to ${agent.name}`
+								: "Unassigned",
+						);
 					});
-					issue.assigneeAgentId = agent?.id ?? null;
-					issue.assigneeUserId = null;
-					new Notice(
-						agent
-							? `Assigned to ${agent.name}`
-							: "Unassigned",
-					);
-				}
+			void doAssign.then(() => {
 				const idx = this.issues.findIndex((i) => i.id === issue.id);
 				if (idx >= 0) this.issues[idx] = { ...issue };
 				if (this.selectedIssue?.id === issue.id) {
 					this.selectedIssue = { ...issue };
 				}
 				this.render();
-			} catch (e) {
+			}).catch((e: unknown) => {
 				new Notice(`Failed to assign: ${e}`);
-			}
+			});
 		}).open();
 	}
 }

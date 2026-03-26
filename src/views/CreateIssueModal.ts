@@ -67,7 +67,7 @@ export class CreateIssueModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("paperclip-create-modal");
-		contentEl.createEl("h3", { text: "Create Issue" });
+	contentEl.createEl("h3", { text: "Create issue" });
 
 		// 1. Title
 		new Setting(contentEl)
@@ -178,18 +178,18 @@ export class CreateIssueModal extends Modal {
 			this.close();
 		};
 
-		new Setting(contentEl).addButton((btn) =>
+	new Setting(contentEl).addButton((btn) =>
 			btn
-				.setButtonText("Create Issue")
+				.setButtonText("Create issue")
 				.setCta()
-				.onClick(doSubmit),
+				.onClick(() => { void doSubmit(); }),
 		);
 
 		// Cmd+Enter to submit
 		contentEl.addEventListener("keydown", (e: KeyboardEvent) => {
 			if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
 				e.preventDefault();
-				doSubmit();
+				void doSubmit();
 			}
 		});
 	}
