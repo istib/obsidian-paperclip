@@ -3,7 +3,7 @@
 	"name": "Paperclip",
 	"version": "0.1.0",
 	"minAppVersion": "1.0.0",
-	"description": "Browse, comment on, and assign Paperclip issues to agents — without leaving Obsidian.",
+	"description": "Browse, comment on, and assign Paperclip issues to agents — without leaving your vault.",
 	"author": "istib",
 	"isDesktopOnly": false
 }
