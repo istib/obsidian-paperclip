@@ -41,7 +41,7 @@ export class CommentModal extends Modal {
 				.setName("Assign to agent")
 				.setDesc(`Currently: ${currentName}`)
 				.addDropdown((dd) => {
-					dd.addOption("", "— No change —");
+					dd.addOption("", "— no change —");
 					for (const a of this.agents) {
 						dd.addOption(a.id, `${a.name} (${a.role})`);
 					}

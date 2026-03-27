@@ -1,8 +1,6 @@
 import { App, SuggestModal } from "obsidian";
 import type { Project } from "../api";
 
-const CREATE_NEW = "__create_new__";
-
 interface ProjectOption {
 	project: Project | null;
 	display: string;

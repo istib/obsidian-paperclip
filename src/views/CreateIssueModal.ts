@@ -99,7 +99,7 @@ export class CreateIssueModal extends Modal {
 			new Setting(contentEl)
 				.setName("Project")
 				.addDropdown((dd) => {
-					dd.addOption("", "— No project —");
+					dd.addOption("", "— no project —");
 					for (const p of this.projects.filter((p) => !p.archivedAt)) {
 						dd.addOption(p.id, p.name);
 					}
@@ -114,8 +114,8 @@ export class CreateIssueModal extends Modal {
 		new Setting(contentEl)
 			.setName("Assign to")
 			.addDropdown((dd) => {
-				dd.addOption(ASSIGN_ME_ID, "👤 Assign to me");
-				dd.addOption("", "— Unassigned —");
+				dd.addOption(ASSIGN_ME_ID, "👤 assign to me");
+				dd.addOption("", "— unassigned —");
 				for (const a of this.agents) {
 					dd.addOption(a.id, `${a.name} (${a.role})`);
 				}
@@ -166,16 +166,19 @@ export class CreateIssueModal extends Modal {
 				desc = desc ? desc + ctx : ctx.trim();
 			}
 
-			const isMe = this.selectedAgentId === ASSIGN_ME_ID;
-			await this.onSubmit({
-				title: this.issueTitle,
-				description: desc,
-				priority: this.priority,
-				assigneeAgentId: isMe ? undefined : (this.selectedAgentId || undefined),
-				assignToMe: isMe,
-				projectId: this.selectedProjectId || undefined,
-			});
-			this.close();
+		const isMe = this.selectedAgentId === ASSIGN_ME_ID;
+		try {
+				await this.onSubmit({
+					title: this.issueTitle,
+					description: desc,
+					priority: this.priority,
+					assigneeAgentId: isMe ? undefined : (this.selectedAgentId || undefined),
+					assignToMe: isMe,
+					projectId: this.selectedProjectId || undefined,
+				});
+			} finally {
+				this.close();
+			}
 		};
 
 	new Setting(contentEl).addButton((btn) =>

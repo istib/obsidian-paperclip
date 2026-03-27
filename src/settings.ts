@@ -34,7 +34,8 @@ export class PaperclipSettingTab extends PluginSettingTab {
 			.setDesc("Paperclip server URL (e.g. http://localhost:3100)")
 			.addText((text) =>
 				text
-					.setPlaceholder("http://localhost:3100")
+				// eslint-disable-next-line obsidianmd/ui/sentence-case
+				.setPlaceholder("http://localhost:3100")
 					.setValue(this.plugin.settings.apiBaseUrl)
 					.onChange(async (value) => {
 						this.plugin.settings.apiBaseUrl = value;
@@ -79,7 +80,8 @@ export class PaperclipSettingTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("sk-...")
+				// eslint-disable-next-line obsidianmd/ui/sentence-case
+				.setPlaceholder("sk-...")
 					.setValue(this.plugin.settings.openaiApiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.openaiApiKey = value;

@@ -1,6 +1,6 @@
-import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer, TFile } from "obsidian";
+import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer } from "obsidian";
 import type PaperclipPlugin from "../main";
-import type { Company, Issue, Agent, Comment, ActiveRun, Project, CreateIssueData } from "../api";
+import type { Company, Issue, Agent, Comment, Project, CreateIssueData } from "../api";
 import { CommentModal } from "./CommentModal";
 import { AssignModal, ASSIGN_TO_ME } from "./AssignModal";
 import { CreateIssueModal } from "./CreateIssueModal";
@@ -112,8 +112,8 @@ export class PaperclipView extends ItemView {
 				await this.loadProjects();
 				await this.loadIssues();
 			}
-		} catch (e) {
-			new Notice(`Paperclip: failed to load companies — ${e}`);
+	} catch (e) {
+			new Notice(`Paperclip: failed to load companies — ${String(e)}`);
 		}
 	}
 
@@ -155,7 +155,7 @@ export class PaperclipView extends ItemView {
 				},
 			);
 		} catch (e) {
-			new Notice(`Paperclip: failed to load issues — ${e}`);
+			new Notice(`Paperclip: failed to load issues — ${String(e)}`);
 			this.issues = [];
 		}
 	}
@@ -295,22 +295,26 @@ export class PaperclipView extends ItemView {
 		this.stopAutoRefresh();
 		const sec = this.plugin.settings.refreshIntervalSec;
 		if (sec > 0) {
-			this.refreshTimer = window.setInterval(async () => {
-				this.snapshotRunning();
-				await this.loadIssues();
-				this.detectFinishedRuns();
-				if (this.selectedIssue) {
-					// Refresh the selected issue from latest data
-					const updated = this.issues.find(
-						(i) => i.id === this.selectedIssue!.id,
-					);
-					if (updated) this.selectedIssue = updated;
-					await this.loadComments(this.selectedIssue.id);
-				}
-				this.render();
+			this.refreshTimer = window.setInterval(() => {
+				void this.doRefresh();
 			}, sec * 1000);
 			this.registerInterval(this.refreshTimer);
 		}
+	}
+
+	private async doRefresh(): Promise<void> {
+		this.snapshotRunning();
+		await this.loadIssues();
+		this.detectFinishedRuns();
+		if (this.selectedIssue) {
+			// Refresh the selected issue from latest data
+			const updated = this.issues.find(
+				(i) => i.id === this.selectedIssue!.id,
+			);
+			if (updated) this.selectedIssue = updated;
+			await this.loadComments(this.selectedIssue.id);
+		}
+		this.render();
 	}
 
 	private stopAutoRefresh(): void {
@@ -709,7 +713,7 @@ export class PaperclipView extends ItemView {
 					new Notice(`${issue.identifier} → ${status.replace("_", " ")}`);
 					this.render();
 				}).catch((err: unknown) => {
-					new Notice(`Failed: ${err}`);
+					new Notice(`Failed: ${String(err)}`);
 				});
 			});
 
@@ -814,7 +818,7 @@ export class PaperclipView extends ItemView {
 		// Back button
 		const nav = container.createDiv({ cls: "paperclip-detail-nav" });
 		const backBtn = nav.createEl("button", {
-			text: "← Back",
+			text: "← back",
 			cls: "paperclip-back",
 		});
 		backBtn.addEventListener("click", () => {
@@ -904,13 +908,13 @@ export class PaperclipView extends ItemView {
 			const descEl = container.createDiv({
 				cls: "paperclip-description",
 			});
-			MarkdownRenderer.render(
-				this.app,
-				issue.description,
-				descEl,
-				"",
-				this,
-			);
+		void MarkdownRenderer.render(
+			this.app,
+			issue.description,
+			descEl,
+			"",
+			this,
+		);
 			this.linkifyVaultPaths(descEl);
 		}
 
@@ -968,7 +972,7 @@ export class PaperclipView extends ItemView {
 				dateSpan.title = new Date(c.createdAt).toLocaleString();
 
 				const cBody = card.createDiv({ cls: "paperclip-comment-body" });
-				MarkdownRenderer.render(
+				void MarkdownRenderer.render(
 					this.app,
 					c.body,
 					cBody,
@@ -995,10 +999,10 @@ export class PaperclipView extends ItemView {
 			if (!file) continue;
 			code.addClass("paperclip-vault-link");
 			code.title = `Open ${text}`;
-			code.addEventListener("click", (e) => {
+		code.addEventListener("click", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
-				this.app.workspace.openLinkText(text, "");
+				void this.app.workspace.openLinkText(text, "");
 			});
 		}
 	}
@@ -1020,15 +1024,15 @@ export class PaperclipView extends ItemView {
 				this.render();
 				return;
 			}
-			try {
-				await this.plugin.api.updateIssue(issue.id, { title: newTitle });
-				issue.title = newTitle;
-				const idx = this.issues.findIndex((i) => i.id === issue.id);
-				if (idx >= 0) this.issues[idx] = { ...this.issues[idx], title: newTitle };
-				new Notice("Title updated");
-			} catch (e) {
-				new Notice(`Failed: ${e}`);
-			}
+		try {
+			await this.plugin.api.updateIssue(issue.id, { title: newTitle });
+			issue.title = newTitle;
+			const idx = this.issues.findIndex((i) => i.id === issue.id);
+			if (idx >= 0) this.issues[idx] = { ...this.issues[idx], title: newTitle };
+			new Notice("Title updated");
+		} catch (e) {
+			new Notice(`Failed: ${String(e)}`);
+		}
 			this.render();
 		};
 
@@ -1064,7 +1068,7 @@ export class PaperclipView extends ItemView {
 				.then(() => this.loadComments(issue.id))
 				.then(() => this.render())
 				.catch((e: unknown) => {
-					new Notice(`Failed: ${e}`);
+					new Notice(`Failed: ${String(e)}`);
 				});
 		}).open();
 	}
@@ -1107,10 +1111,10 @@ export class PaperclipView extends ItemView {
 					new Notice("Issue created");
 					await this.loadIssues();
 					this.render();
-				} catch (e) {
-					new Notice(`Failed to create issue: ${e}`);
-				}
-			},
+			} catch (e) {
+				new Notice(`Failed to create issue: ${String(e)}`);
+			}
+		},
 		).open();
 	}
 
@@ -1131,7 +1135,7 @@ export class PaperclipView extends ItemView {
 							new Notice(`Priority → ${labels[p]}`);
 							this.render();
 						}).catch((e: unknown) => {
-							new Notice(`Failed: ${e}`);
+							new Notice(`Failed: ${String(e)}`);
 						});
 					});
 			});
@@ -1168,7 +1172,7 @@ export class PaperclipView extends ItemView {
 							new Notice(`Status → ${statusLabel(s)}`);
 							this.render();
 						}).catch((e: unknown) => {
-							new Notice(`Failed: ${e}`);
+							new Notice(`Failed: ${String(e)}`);
 						});
 					});
 			});
@@ -1194,7 +1198,7 @@ export class PaperclipView extends ItemView {
 					);
 					this.render();
 				}).catch((e: unknown) => {
-					new Notice(`Failed to set project: ${e}`);
+					new Notice(`Failed to set project: ${String(e)}`);
 				});
 			},
 			async (name) => {
@@ -1238,9 +1242,9 @@ export class PaperclipView extends ItemView {
 					this.selectedIssue = { ...issue };
 				}
 				this.render();
-			}).catch((e: unknown) => {
-				new Notice(`Failed to assign: ${e}`);
-			});
+		}).catch((e: unknown) => {
+			new Notice(`Failed to assign: ${String(e)}`);
+		});
 		}).open();
 	}
 }

@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, requestUrl } from "obsidian";
+import { Notice, Plugin, requestUrl } from "obsidian";
 import { PaperclipApi } from "./api";
 import {
 	PaperclipSettings,
@@ -7,7 +7,6 @@ import {
 } from "./settings";
 import { PaperclipView, VIEW_TYPE } from "./views/PaperclipView";
 import { CreateIssueModal } from "./views/CreateIssueModal";
-import { AssignModal } from "./views/AssignModal";
 import type { Agent, Project } from "./api";
 
 export default class PaperclipPlugin extends Plugin {
@@ -81,18 +80,18 @@ export default class PaperclipPlugin extends Plugin {
 
 				if (sel) {
 					menu.addItem((item) => {
-						item.setTitle("📎 Create issue from selection")
+						item.setTitle("📎 create issue from selection")
 							.setIcon("paperclip")
 							.onClick(() => { void this.createIssueWithAI(sel, "work"); });
 					});
 				} else {
 					menu.addItem((item) => {
-						item.setTitle("📎 Work on this document")
+						item.setTitle("📎 work on this document")
 							.setIcon("paperclip")
 							.onClick(() => { void this.createIssueWithAI("", "work"); });
 					});
 					menu.addItem((item) => {
-						item.setTitle("📎 Review this document")
+						item.setTitle("📎 review this document")
 							.setIcon("eye")
 							.onClick(() => { void this.createIssueWithAI("", "review"); });
 					});
@@ -166,13 +165,13 @@ export default class PaperclipPlugin extends Plugin {
 							await this.api.updateIssue(created.id, { assigneeUserId: "local-board" });
 						}
 						new Notice("Issue created");
-					} catch (e) {
-						new Notice(`Failed to create issue: ${e}`);
-					}
-				},
-			).open();
+				} catch (e) {
+					new Notice(`Failed to create issue: ${String(e)}`);
+				}
+			},
+		).open();
 		} catch (e) {
-			new Notice(`Paperclip: ${e}`);
+			new Notice(`Paperclip: ${String(e)}`);
 		}
 	}
 
@@ -338,12 +337,12 @@ File: ${filePath}`,
 							await this.api.updateIssue(created.id, { assigneeUserId: "local-board" });
 						}
 						new Notice("Issue created");
-					} catch (e) {
-						new Notice(`Failed to create issue: ${e}`);
-					}
-				},
-				{
-					title: parsed.title ?? "",
+				} catch (e) {
+					new Notice(`Failed to create issue: ${String(e)}`);
+				}
+			},
+			{
+				title: parsed.title ?? "",
 					description: parsed.description ?? "",
 					priority: parsed.priority ?? "medium",
 					assigneeAgentId: matchedAgent?.id ?? "",
@@ -351,20 +350,20 @@ File: ${filePath}`,
 				},
 			).open();
 		} catch (e) {
-			new Notice(`AI issue creation failed: ${e}`);
+			new Notice(`AI issue creation failed: ${String(e)}`);
 		}
 	}
 
 	private async activateView(): Promise<void> {
 		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
 		if (existing.length > 0) {
-			this.app.workspace.revealLeaf(existing[0]);
+			await this.app.workspace.revealLeaf(existing[0]);
 			return;
 		}
 		const leaf = this.app.workspace.getRightLeaf(false);
 		if (leaf) {
 			await leaf.setViewState({ type: VIEW_TYPE, active: true });
-			this.app.workspace.revealLeaf(leaf);
+			await this.app.workspace.revealLeaf(leaf);
 		}
 	}
 }

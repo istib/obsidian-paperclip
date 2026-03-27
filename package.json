@@ -11,11 +11,17 @@
 	"author": "istib",
 	"license": "MIT",
 	"devDependencies": {
+		"@eslint/json": "^1.2.0",
 		"@types/node": "^25.5.0",
+		"@typescript-eslint/eslint-plugin": "^8.57.2",
+		"@typescript-eslint/parser": "^8.57.2",
 		"builtin-modules": "^5.0.0",
 		"esbuild": "^0.27.4",
+		"eslint": "^10.1.0",
+		"eslint-plugin-obsidianmd": "^0.1.9",
 		"obsidian": "^1.12.3",
 		"tslib": "^2.6.0",
-		"typescript": "^6.0.2"
+		"typescript": "^6.0.2",
+		"typescript-eslint": "^8.57.2"
 	}
 }
