@@ -1,3 +1,50 @@
+/* ── Search modal ───────────────────────────────────────────── */
+.paperclip-search-suggestion {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+}
+
+.paperclip-search-suggestion .paperclip-issue-id {
+	flex-shrink: 0;
+}
+
+.paperclip-search-title {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.paperclip-search-suggestion .paperclip-status {
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
+.paperclip-search-filter-bar {
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	display: flex;
+	gap: 6px;
+}
+
+.paperclip-search-filter-btn {
+	padding: 2px 10px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.paperclip-search-filter-btn.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
 /* ── Container ──────────────────────────────────────────────── */
 .paperclip-container {
 	padding: 8px;

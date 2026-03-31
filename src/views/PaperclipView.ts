@@ -11,6 +11,7 @@ export const VIEW_TYPE = "paperclip-view";
 type StatusFilter = "active" | "all" | "done";
 type ViewMode = "list" | "kanban";
 type GroupBy = "status" | "project" | "assignee";
+type SortBy = "updated" | "created" | "priority";
 
 const KANBAN_STATUSES = [
 	"backlog",
@@ -34,6 +35,7 @@ export class PaperclipView extends ItemView {
 	private statusFilter: StatusFilter = "all";
 	private viewMode: ViewMode = "list";
 	private groupBy: GroupBy = "status";
+	private sortBy: SortBy = "updated";
 	private selectedIssue: Issue | null = null;
 	private comments: Comment[] = [];
 	private refreshTimer: number | null = null;
@@ -57,6 +59,13 @@ export class PaperclipView extends ItemView {
 	getAgents(): Agent[] { return this.agents; }
 	getProjects(): Project[] { return this.projects; }
 	getSelectedCompanyId(): string { return this.selectedCompanyId; }
+	getIssues(): Issue[] { return this.issues; }
+
+	/** Open the detail view for a specific issue */
+	selectIssue(issue: Issue): void {
+		this.selectedIssue = issue;
+		void this.loadComments(issue.id).then(() => this.render());
+	}
 
 	getViewType(): string {
 		return VIEW_TYPE;
@@ -326,6 +335,22 @@ export class PaperclipView extends ItemView {
 
 	// ── Rendering ──────────────────────────────────────────────────
 
+	private sortIssues(issues: Issue[]): Issue[] {
+		const priorityOrder: Record<string, number> = {
+			critical: 0, high: 1, medium: 2, low: 3,
+		};
+		const arr = [...issues];
+		switch (this.sortBy) {
+			case "created":
+				return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+			case "priority":
+				return arr.sort((a, b) =>
+					(priorityOrder[a.priority ?? "low"] ?? 3) - (priorityOrder[b.priority ?? "low"] ?? 3));
+			default: // "updated"
+				return arr.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+		}
+	}
+
 	render(): void {
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
@@ -425,6 +450,23 @@ export class PaperclipView extends ItemView {
 		// Action buttons row
 		const headerActions = header.createDiv({ cls: "paperclip-header-actions" });
 
+		// Sort button
+		const sortMeta: Record<SortBy, { icon: string; label: string }> = {
+			updated:  { icon: "clock",                label: "Sort: recently updated" },
+			created:  { icon: "calendar",             label: "Sort: recently created" },
+			priority: { icon: "arrow-up-narrow-wide", label: "Sort: priority" },
+		};
+		const sortBtn = headerActions.createEl("button", {
+			cls: "clickable-icon",
+			attr: { "aria-label": sortMeta[this.sortBy].label },
+		});
+		setIcon(sortBtn, sortMeta[this.sortBy].icon);
+		sortBtn.addEventListener("click", () => {
+			const cycle: SortBy[] = ["updated", "created", "priority"];
+			this.sortBy = cycle[(cycle.indexOf(this.sortBy) + 1) % cycle.length];
+			this.render();
+		});
+
 		// View mode toggle
 		const toggleBtn = headerActions.createEl("button", {
 			cls: "clickable-icon",
@@ -520,10 +562,7 @@ export class PaperclipView extends ItemView {
 			return;
 		}
 
-		// Sort all issues by most recently updated
-		const sorted = [...this.issues].sort(
-			(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-		);
+		const sorted = this.sortIssues(this.issues);
 
 	if (this.groupBy === "status") {
 			const statusOrder = KANBAN_STATUSES;
@@ -670,13 +709,9 @@ export class PaperclipView extends ItemView {
 		const board = container.createDiv({ cls: "kb-board" });
 
 		for (const status of KANBAN_STATUSES) {
-			const colIssues = this.issues
-				.filter((i) => i.status === status)
-				.sort(
-					(a, b) =>
-						new Date(b.updatedAt).getTime() -
-						new Date(a.updatedAt).getTime(),
-				);
+			const colIssues = this.sortIssues(
+				this.issues.filter((i) => i.status === status),
+			);
 
 			const col = board.createDiv({ cls: "kb-col" });
 			col.dataset.status = status;
@@ -926,6 +961,16 @@ export class PaperclipView extends ItemView {
 		});
 		commentBtn.addEventListener("click", () => {
 			this.openCommentModal(issue);
+		});
+
+		const openWebBtn = actions.createEl("button", {
+			cls: "paperclip-open-web clickable-icon",
+			attr: { "aria-label": "Open in web UI" },
+		});
+		setIcon(openWebBtn, "external-link");
+		openWebBtn.addEventListener("click", () => {
+			const url = `${this.plugin.settings.apiBaseUrl}/issues/${issue.identifier}`;
+			window.open(url, "_blank");
 		});
 
 		// Comments thread

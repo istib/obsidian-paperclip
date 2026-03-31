@@ -7,6 +7,7 @@ import {
 } from "./settings";
 import { PaperclipView, VIEW_TYPE } from "./views/PaperclipView";
 import { CreateIssueModal } from "./views/CreateIssueModal";
+import { SearchIssueModal } from "./views/SearchIssueModal";
 import type { Agent, Project } from "./api";
 
 export default class PaperclipPlugin extends Plugin {
@@ -40,6 +41,12 @@ export default class PaperclipPlugin extends Plugin {
 			id: "create-issue",
 			name: "Create issue",
 			callback: () => { void this.openCreateIssue(); },
+		});
+
+		this.addCommand({
+			id: "search-issue",
+			name: "Search issues",
+			callback: () => { void this.openSearchIssues(); },
 		});
 
 		this.addCommand({
@@ -351,6 +358,38 @@ File: ${filePath}`,
 			).open();
 		} catch (e) {
 			new Notice(`AI issue creation failed: ${String(e)}`);
+		}
+	}
+
+	private async openSearchIssues(): Promise<void> {
+		try {
+			// Prefer cached issues from the sidebar view
+			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+			let issues = leaves.length > 0
+				? (leaves[0].view as PaperclipView).getIssues()
+				: [];
+
+			// Fall back to a fresh fetch if the view isn't open / cache is empty
+			if (issues.length === 0) {
+				const companies = await this.api.listCompanies();
+				const companyId =
+					this.settings.defaultCompanyId || companies[0]?.id;
+				if (!companyId) {
+					new Notice("Paperclip: no companies found");
+					return;
+				}
+				issues = await this.api.listIssues(companyId);
+			}
+
+			new SearchIssueModal(this.app, issues, async (issue) => {
+				await this.activateView();
+				const viewLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+				if (viewLeaves.length > 0) {
+					(viewLeaves[0].view as PaperclipView).selectIssue(issue);
+				}
+			}).open();
+		} catch (e) {
+			new Notice(`Paperclip: ${String(e)}`);
 		}
 	}
 
