@@ -17,7 +17,7 @@ export class SearchIssueModal extends FuzzySuggestModal<Issue> {
 	}
 
 	onOpen(): void {
-		super.onOpen();
+		void super.onOpen();
 		const filterBar = document.createElement("div");
 		filterBar.addClass("paperclip-search-filter-bar");
 		const toggleBtn = filterBar.createEl("button", {

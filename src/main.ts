@@ -381,12 +381,13 @@ File: ${filePath}`,
 				issues = await this.api.listIssues(companyId);
 			}
 
-			new SearchIssueModal(this.app, issues, async (issue) => {
-				await this.activateView();
-				const viewLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-				if (viewLeaves.length > 0) {
-					(viewLeaves[0].view as PaperclipView).selectIssue(issue);
-				}
+		new SearchIssueModal(this.app, issues, (issue) => {
+				void this.activateView().then(() => {
+					const viewLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+					if (viewLeaves.length > 0) {
+						(viewLeaves[0].view as PaperclipView).selectIssue(issue);
+					}
+				});
 			}).open();
 		} catch (e) {
 			new Notice(`Paperclip: ${String(e)}`);
