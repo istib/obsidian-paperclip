@@ -592,32 +592,100 @@
 	min-height: 150px;
 }
 
-/* ── Comment modal ────────────────────────────────────────── */
-.paperclip-comment-textarea {
-	width: 100%;
-	min-height: 120px;
+/* ── Add-comment toggle button ─────────────────────────────── */
+.paperclip-add-comment-btn {
+	cursor: pointer;
 }
 
-.paperclip-mention-hint {
+.paperclip-inline-comment-wrapper {
+	margin-bottom: 10px;
+}
+
+/* ── Inline comment form ──────────────────────────────────── */
+.paperclip-inline-comment {
+	padding: 10px;
+	margin-bottom: 12px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.paperclip-inline-assign {
 	display: flex;
 	align-items: center;
-	flex-wrap: wrap;
-	gap: 4px;
-	margin-bottom: 8px;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.paperclip-inline-assign-label {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
+	flex-shrink: 0;
 }
 
-.paperclip-mention-chip {
-	padding: 1px 6px;
+.paperclip-inline-assign-select {
+	flex: 1;
+	min-width: 0;
+}
+
+.paperclip-inline-textarea {
+	width: 100%;
+	min-height: 60px;
+	resize: vertical;
+	margin-bottom: 6px;
 	border-radius: var(--radius-s);
-	background: var(--background-modifier-border);
-	border: none;
-	cursor: pointer;
-	font-size: 11px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	padding: 6px 8px;
+	font-size: var(--font-ui-small);
+	font-family: inherit;
 }
 
-.paperclip-mention-chip:hover {
+.paperclip-inline-textarea:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.paperclip-inline-submit {
+	float: right;
+	margin-bottom: 6px;
+}
+
+/* clearfix so the form container wraps around the floated button */
+.paperclip-inline-comment::after {
+	content: "";
+	display: table;
+	clear: both;
+}
+
+/* ── @mention autocomplete ────────────────────────────────── */
+.paperclip-textarea-wrapper {
+	position: relative;
+}
+
+.paperclip-mention-ac {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 100%;
+	margin-bottom: 2px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	max-height: 160px;
+	overflow-y: auto;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.paperclip-mention-ac-item {
+	padding: 4px 8px;
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.paperclip-mention-ac-item:hover,
+.paperclip-mention-ac-item.is-selected {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 }

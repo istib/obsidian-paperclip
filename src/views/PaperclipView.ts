@@ -1,7 +1,6 @@
 import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer } from "obsidian";
 import type PaperclipPlugin from "../main";
 import type { Company, Issue, Agent, Comment, Project, CreateIssueData } from "../api";
-import { CommentModal } from "./CommentModal";
 import { AssignModal, ASSIGN_TO_ME } from "./AssignModal";
 import { CreateIssueModal } from "./CreateIssueModal";
 import { ProjectModal } from "./ProjectModal";
@@ -45,6 +44,8 @@ export class PaperclipView extends ItemView {
 	private contributors: Map<string, string[]> = new Map();
 	/** Track collapsed section groups in list view */
 	private collapsedGroups: Set<string> = new Set();
+	/** Whether the inline comment form is currently open */
+	private commentFormOpen = false;
 	/** Issues related to the currently active file */
 	private relatedIssues: Issue[] = [];
 	/** Path of the file whose related issues are currently loaded */
@@ -323,7 +324,10 @@ export class PaperclipView extends ItemView {
 			if (updated) this.selectedIssue = updated;
 			await this.loadComments(this.selectedIssue.id);
 		}
-		this.render();
+		// Don't re-render while the user is composing a comment
+		if (!this.commentFormOpen) {
+			this.render();
+		}
 	}
 
 	private stopAutoRefresh(): void {
@@ -955,12 +959,26 @@ export class PaperclipView extends ItemView {
 
 		// Action buttons
 		const actions = container.createDiv({ cls: "paperclip-actions" });
-		const commentBtn = actions.createEl("button", {
+
+		// "Add comment" toggle button
+		const addCommentBtn = actions.createEl("button", {
 			text: "Add comment",
-			cls: "mod-cta",
+			cls: "paperclip-add-comment-btn mod-cta",
 		});
-		commentBtn.addEventListener("click", () => {
-			this.openCommentModal(issue);
+
+		const refreshBtn = actions.createEl("button", {
+			cls: "clickable-icon",
+			attr: { "aria-label": "Refresh" },
+		});
+		setIcon(refreshBtn, "refresh-cw");
+		refreshBtn.addEventListener("click", () => {
+			void this.loadIssues().then(async () => {
+				const updated = this.issues.find((i) => i.id === issue.id);
+				if (updated) this.selectedIssue = updated;
+				await this.loadComments(issue.id);
+				this.render();
+				new Notice("Refreshed");
+			});
 		});
 
 		const openWebBtn = actions.createEl("button", {
@@ -972,6 +990,23 @@ export class PaperclipView extends ItemView {
 			const url = `${this.plugin.settings.apiBaseUrl}/issues/${issue.identifier}`;
 			window.open(url, "_blank");
 		});
+
+		// Inline comment form (hidden by default)
+		const formWrapper = container.createDiv({ cls: "paperclip-inline-comment-wrapper" });
+		formWrapper.style.display = "none";
+		addCommentBtn.addEventListener("click", () => {
+			const isHidden = formWrapper.style.display === "none";
+			formWrapper.style.display = isHidden ? "" : "none";
+			addCommentBtn.setText(isHidden ? "Cancel" : "Add comment");
+			addCommentBtn.toggleClass("mod-cta", isHidden);
+			addCommentBtn.toggleClass("mod-warning", !isHidden);
+			this.commentFormOpen = isHidden;
+			if (isHidden) {
+				const ta = formWrapper.querySelector("textarea");
+				if (ta) ta.focus();
+			}
+		});
+		this.renderInlineCommentForm(formWrapper, issue);
 
 		// Comments thread
 		const thread = container.createDiv({ cls: "paperclip-comments" });
@@ -1027,6 +1062,157 @@ export class PaperclipView extends ItemView {
 				this.linkifyVaultPaths(cBody);
 			}
 		}
+	}
+
+	private renderInlineCommentForm(container: HTMLElement, issue: Issue): void {
+		let commentBody = "";
+		let selectedAgentId = "";
+
+		const form = container.createDiv({ cls: "paperclip-inline-comment" });
+
+		// Agent assign dropdown
+		if (this.agents.length > 0) {
+			const assignRow = form.createDiv({ cls: "paperclip-inline-assign" });
+			assignRow.createSpan({ cls: "paperclip-inline-assign-label", text: "Assign to" });
+			const dd = assignRow.createEl("select", { cls: "paperclip-inline-assign-select dropdown" });
+			const noChange = dd.createEl("option", { text: "— no change —" });
+			noChange.value = "";
+			for (const a of this.agents) {
+				const opt = dd.createEl("option", { text: `${a.name} (${a.role})` });
+				opt.value = a.id;
+			}
+			dd.addEventListener("change", () => { selectedAgentId = dd.value; });
+		}
+
+		// Textarea with @mention autocomplete
+		const textareaWrapper = form.createDiv({ cls: "paperclip-textarea-wrapper" });
+		const textarea = textareaWrapper.createEl("textarea", {
+			cls: "paperclip-inline-textarea",
+			attr: { placeholder: "Write a comment…", rows: "3" },
+		});
+
+		// Autocomplete dropdown for @mentions
+		const acDropdown = textareaWrapper.createDiv({ cls: "paperclip-mention-ac" });
+		acDropdown.style.display = "none";
+		let acIndex = 0;
+		let acMatches: Agent[] = [];
+
+		const dismissAc = () => {
+			acDropdown.style.display = "none";
+			acMatches = [];
+		};
+
+		const applyAc = (agent: Agent) => {
+			const val = textarea.value;
+			const cursor = textarea.selectionStart;
+			// Find the @ that started this mention
+			const before = val.slice(0, cursor);
+			const atIdx = before.lastIndexOf("@");
+			if (atIdx === -1) { dismissAc(); return; }
+			const after = val.slice(cursor);
+			const insertion = `@${agent.name} `;
+			textarea.value = val.slice(0, atIdx) + insertion + after;
+			commentBody = textarea.value;
+			const newCursor = atIdx + insertion.length;
+			textarea.setSelectionRange(newCursor, newCursor);
+			textarea.focus();
+			dismissAc();
+		};
+
+		const renderAc = () => {
+			acDropdown.empty();
+			if (acMatches.length === 0) { dismissAc(); return; }
+			acDropdown.style.display = "";
+			for (let i = 0; i < acMatches.length; i++) {
+				const agent = acMatches[i];
+				const item = acDropdown.createDiv({
+					cls: `paperclip-mention-ac-item${i === acIndex ? " is-selected" : ""}`,
+					text: `${agent.name} (${agent.role})`,
+				});
+				item.addEventListener("mousedown", (e) => {
+					e.preventDefault();
+					applyAc(agent);
+				});
+			}
+		};
+
+		textarea.addEventListener("input", () => {
+			commentBody = textarea.value;
+			if (this.agents.length === 0) return;
+			const cursor = textarea.selectionStart;
+			const before = textarea.value.slice(0, cursor);
+			const match = before.match(/@(\w*)$/);
+			if (match) {
+				const query = match[1].toLowerCase();
+				acMatches = this.agents.filter((a) => a.name.toLowerCase().startsWith(query));
+				acIndex = 0;
+				renderAc();
+			} else {
+				dismissAc();
+			}
+		});
+
+		textarea.addEventListener("keydown", (e) => {
+			if (acMatches.length === 0) return;
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				acIndex = (acIndex + 1) % acMatches.length;
+				renderAc();
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault();
+				acIndex = (acIndex - 1 + acMatches.length) % acMatches.length;
+				renderAc();
+			} else if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				applyAc(acMatches[acIndex]);
+			} else if (e.key === "Escape") {
+				dismissAc();
+			}
+		});
+
+		textarea.addEventListener("blur", () => {
+			// Small delay so mousedown on dropdown item fires first
+			window.setTimeout(() => dismissAc(), 150);
+		});
+
+		// Submit button
+		const submitBtn = form.createEl("button", {
+			text: "Post comment",
+			cls: "paperclip-inline-submit mod-cta",
+		});
+		submitBtn.addEventListener("click", () => {
+			if (!commentBody.trim()) return;
+			submitBtn.disabled = true;
+			submitBtn.setText("Posting…");
+
+			const action = selectedAgentId
+				? this.plugin.api.updateIssue(issue.id, {
+						assigneeAgentId: selectedAgentId,
+						assigneeUserId: null,
+						comment: commentBody,
+					}).then(async () => {
+						issue.assigneeAgentId = selectedAgentId;
+						// Bounce status: backlog → in_progress so the agent picks it up
+						await this.plugin.api.updateIssue(issue.id, { status: "backlog" });
+						await this.plugin.api.updateIssue(issue.id, { status: "in_progress" });
+						issue.status = "in_progress";
+						const agentLabel = this.agentName(selectedAgentId);
+						new Notice(`Comment posted & assigned to ${agentLabel}`);
+					})
+				: this.plugin.api.addComment(issue.id, commentBody).then(() => {
+						new Notice("Comment posted");
+					});
+
+			this.commentFormOpen = false;
+			void action
+				.then(() => this.loadComments(issue.id))
+				.then(() => this.render())
+				.catch((e: unknown) => {
+					new Notice(`Failed: ${String(e)}`);
+					submitBtn.disabled = false;
+					submitBtn.setText("Post comment");
+				});
+		});
 	}
 
 	/** Convert file paths in rendered markdown <code> elements into clickable vault links */
@@ -1093,30 +1279,6 @@ export class PaperclipView extends ItemView {
 	}
 
 	// ── Modal helpers ──────────────────────────────────────────────────
-
-	private openCommentModal(issue: Issue): void {
-		new CommentModal(this.app, issue, this.agents, (result) => {
-			const action = result.assignAgentId
-				? this.plugin.api.updateIssue(issue.id, {
-						assigneeAgentId: result.assignAgentId,
-						assigneeUserId: null,
-						comment: result.body,
-					}).then(() => {
-						issue.assigneeAgentId = result.assignAgentId ?? null;
-						const agentName = this.agentName(result.assignAgentId ?? null);
-						new Notice(`Comment posted & assigned to ${agentName}`);
-					})
-				: this.plugin.api.addComment(issue.id, result.body).then(() => {
-						new Notice("Comment posted");
-					});
-			void action
-				.then(() => this.loadComments(issue.id))
-				.then(() => this.render())
-				.catch((e: unknown) => {
-					new Notice(`Failed: ${String(e)}`);
-				});
-		}).open();
-	}
 
 	openCreateIssueModal(): void {
 		const activeFile = this.app.workspace.getActiveFile();
