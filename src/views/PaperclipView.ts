@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer } from "obsidian";
+import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer, FileSystemAdapter } from "obsidian";
 import type PaperclipPlugin from "../main";
 import type { Company, Issue, Agent, Comment, Project, CreateIssueData } from "../api";
 import {
@@ -57,6 +57,8 @@ export class PaperclipView extends ItemView {
 	private activityExpanded = false;
 	/** Comments individually expanded while the thread is collapsed */
 	private expandedCommentIds: Set<string> = new Set();
+	/** Whether the issue description is fully expanded */
+	private descriptionExpanded = false;
 	/** Issues related to the currently active file */
 	private relatedIssues: Issue[] = [];
 	/** Path of the file whose related issues are currently loaded */
@@ -103,6 +105,7 @@ export class PaperclipView extends ItemView {
 	/** Open the detail view for a specific issue */
 	selectIssue(issue: Issue): void {
 		this.selectedIssue = issue;
+		this.descriptionExpanded = false;
 		void this.loadComments(issue.id).then(() => this.render());
 	}
 
@@ -413,6 +416,15 @@ export class PaperclipView extends ItemView {
 			this.renderRelatedIssues(container);
 			this.renderListBody(container);
 		}
+	}
+
+	private renderPreservingScroll(): void {
+		const container = this.containerEl.children[1] as HTMLElement;
+		const previousScrollTop = container.scrollTop;
+		this.render();
+		window.requestAnimationFrame(() => {
+			container.scrollTop = previousScrollTop;
+		});
 	}
 
 	private renderHeader(container: HTMLElement): void {
@@ -983,17 +995,31 @@ export class PaperclipView extends ItemView {
 
 		// Description
 		if (issue.description) {
-			const descEl = container.createDiv({
-				cls: "paperclip-description",
+			const descriptionSection = container.createDiv({ cls: "paperclip-description" });
+			const descBody = descriptionSection.createDiv({
+				cls: `paperclip-description-body${this.descriptionExpanded ? "" : " is-collapsed"}`,
 			});
-		void MarkdownRenderer.render(
-			this.app,
-			issue.description,
-			descEl,
-			"",
-			this,
-		);
-			this.linkifyVaultPaths(descEl);
+			void MarkdownRenderer.render(
+				this.app,
+				issue.description,
+				descBody,
+				"",
+				this,
+			);
+			this.linkifyVaultPaths(descBody);
+
+			const lineCount = issue.description.split(/\r?\n/).length;
+			const isLongDescription = lineCount > 4 || issue.description.length > 320;
+			if (isLongDescription) {
+				const toggle = descriptionSection.createEl("button", {
+					cls: "paperclip-description-toggle",
+					text: this.descriptionExpanded ? "Show less" : "Show more",
+				});
+				toggle.addEventListener("click", () => {
+					this.descriptionExpanded = !this.descriptionExpanded;
+					this.renderPreservingScroll();
+				});
+			}
 		}
 
 		// Action buttons
@@ -1091,40 +1117,89 @@ export class PaperclipView extends ItemView {
 					cls: `paperclip-comment ${isAgent ? "is-agent" : "is-user"}${commentExpanded ? "" : " is-folded"}`,
 				});
 
-				// Click folded comment to expand just that one
-				if (!this.activityExpanded) {
-					card.style.cursor = "pointer";
+				// Click folded comment to expand just that one.
+				// Expanded comments should not collapse on ordinary clicks, so text selection works normally.
+				if (!this.activityExpanded && !commentExpanded) {
+					card.addClass("paperclip-comment-clickable");
 					card.addEventListener("click", () => {
-						if (this.expandedCommentIds.has(c.id)) {
-							this.expandedCommentIds.delete(c.id);
-						} else {
-							this.expandedCommentIds.add(c.id);
-						}
-						this.render();
+						this.toggleExpandedComment(c.id);
 					});
 				}
 
 				// Avatar + header row
 				const cHeader = card.createDiv({ cls: "paperclip-comment-header" });
+				if (!this.activityExpanded && commentExpanded) {
+					cHeader.addClass("paperclip-comment-clickable");
+					cHeader.addEventListener("click", () => {
+						this.toggleExpandedComment(c.id);
+					});
+				}
 				const avatar = cHeader.createSpan({
 					cls: `paperclip-comment-avatar ${isAgent ? "is-agent" : "is-user"}`,
 					text: initials,
 				});
 				avatar.title = author;
-				const headerText = cHeader.createDiv({ cls: "paperclip-comment-meta" });
-				headerText.createSpan({
-					cls: "paperclip-comment-author",
-					text: author,
+				const plain = c.body
+					.replace(/```[\s\S]*?```/g, " ")
+					.replace(/`[^`]+`/g, (m) => m.slice(1, -1))
+					.replace(/[[\]#*_~>!|-]+/g, "")
+					.replace(/\n+/g, " ")
+					.trim();
+				const preview = plain.length > 120 ? plain.slice(0, 120) + "\u2026" : plain;
+				const headerText = cHeader.createDiv({
+					cls: `paperclip-comment-meta${commentExpanded ? "" : " is-folded"}`,
 				});
+				if (commentExpanded) {
+					headerText.createSpan({
+						cls: "paperclip-comment-author",
+						text: author,
+					});
+				} else if (preview) {
+					headerText.createSpan({
+						cls: "paperclip-comment-preview",
+						text: preview,
+					});
+				}
 				const dateSpan = headerText.createSpan({
 					cls: "paperclip-comment-date",
 					text: this.relativeTime(c.createdAt),
 				});
 				dateSpan.title = new Date(c.createdAt).toLocaleString();
+				const headerActions = cHeader.createDiv({ cls: "paperclip-comment-actions" });
+				if (commentExpanded) {
+					const copyBtn = headerActions.createEl("button", {
+						cls: "paperclip-comment-action clickable-icon",
+						attr: { "aria-label": "Copy comment" },
+					});
+					setIcon(copyBtn, "copy");
+					copyBtn.addEventListener("click", (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						void this.copyCommentBody(c.body);
+					});
+				}
+				if (!this.activityExpanded) {
+					const toggleBtn = headerActions.createEl("button", {
+						cls: "paperclip-comment-action clickable-icon",
+						attr: { "aria-label": commentExpanded ? "Collapse comment" : "Expand comment" },
+					});
+					setIcon(toggleBtn, commentExpanded ? "chevron-up" : "chevron-down");
+					toggleBtn.addEventListener("click", (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						this.toggleExpandedComment(c.id);
+					});
+				}
 
 				if (commentExpanded) {
 					// Full rendered markdown body
 					const cBody = card.createDiv({ cls: "paperclip-comment-body" });
+					cBody.addEventListener("click", (e) => {
+						e.stopPropagation();
+					});
+					cBody.addEventListener("mousedown", (e) => {
+						e.stopPropagation();
+					});
 					void MarkdownRenderer.render(
 						this.app,
 						c.body,
@@ -1134,22 +1209,27 @@ export class PaperclipView extends ItemView {
 					);
 					this.linkifyVaultPaths(cBody);
 				} else {
-					// Folded: short plain-text preview
-					const plain = c.body
-						.replace(/```[\s\S]*?```/g, " ")
-						.replace(/`[^`]+`/g, (m) => m.slice(1, -1))
-						.replace(/[#*_~>\[\]!|-]+/g, "")
-						.replace(/\n+/g, " ")
-						.trim();
-					const preview = plain.length > 120 ? plain.slice(0, 120) + "\u2026" : plain;
-					if (preview) {
-						cHeader.createSpan({
-							cls: "paperclip-comment-preview",
-							text: " \u2014 " + preview,
-						});
-					}
+					// Folded preview is rendered inline in the header row.
 				}
 			}
+		}
+	}
+
+	private toggleExpandedComment(commentId: string): void {
+		if (this.expandedCommentIds.has(commentId)) {
+			this.expandedCommentIds.delete(commentId);
+		} else {
+			this.expandedCommentIds.add(commentId);
+		}
+		this.renderPreservingScroll();
+	}
+
+	private async copyCommentBody(body: string): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(body);
+			new Notice("Comment copied");
+		} catch {
+			new Notice("Failed to copy comment");
 		}
 	}
 
@@ -1355,25 +1435,201 @@ export class PaperclipView extends ItemView {
 		}
 	}
 
-	/** Convert file paths in rendered markdown <code> elements into clickable vault links */
+	/** Convert file paths in rendered markdown into clickable file links */
 	private linkifyVaultPaths(el: HTMLElement): void {
 		const codeEls = el.querySelectorAll("code");
 		for (const code of Array.from(codeEls)) {
 			const text = code.textContent ?? "";
-			// Match paths that look like vault files (contain / or end with common extensions)
-			if (
-				!text.includes("/") &&
-				!PaperclipView.FILE_EXT_RE.test(text)
-			) continue;
-			const resolved = this.resolveVaultPath(text);
+			const resolved = this.resolveFileReference(text);
 			if (!resolved) continue;
 			code.addClass("paperclip-vault-link");
-			code.title = `Open ${resolved}`;
+			code.title = `Open ${resolved.target}`;
 			code.addEventListener("click", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
-				void this.app.workspace.openLinkText(resolved, "");
+				void this.openResolvedFileReference(resolved);
 			});
+		}
+
+		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+			acceptNode: (node) => {
+				const parent = node.parentElement;
+				if (!parent) return NodeFilter.FILTER_REJECT;
+				if (parent.closest("code, pre, a")) return NodeFilter.FILTER_REJECT;
+				const text = node.textContent ?? "";
+				return this.findVaultPathMatches(text).length > 0
+					? NodeFilter.FILTER_ACCEPT
+					: NodeFilter.FILTER_REJECT;
+			},
+		});
+
+		const textNodes: Text[] = [];
+		let current = walker.nextNode();
+		while (current) {
+			textNodes.push(current as Text);
+			current = walker.nextNode();
+		}
+
+		for (const textNode of textNodes) {
+			const source = textNode.textContent ?? "";
+			const matches = this.findVaultPathMatches(source);
+			if (matches.length === 0) continue;
+
+			const fragment = document.createDocumentFragment();
+			let cursor = 0;
+			for (const match of matches) {
+				if (match.start > cursor) {
+					fragment.appendChild(document.createTextNode(source.slice(cursor, match.start)));
+				}
+				const link = document.createElement("a");
+				link.href = "#";
+				link.className = "paperclip-ref-file-link";
+				link.textContent = match.display;
+				link.addEventListener("click", (e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					void this.openResolvedFileReference(match);
+				});
+				fragment.appendChild(link);
+				cursor = match.end;
+			}
+			if (cursor < source.length) {
+				fragment.appendChild(document.createTextNode(source.slice(cursor)));
+			}
+			textNode.parentNode?.replaceChild(fragment, textNode);
+		}
+	}
+
+	private findVaultPathMatches(
+		text: string,
+	): Array<{ start: number; end: number; display: string; target: string; kind: "vault" | "external" }> {
+		const matches: Array<{ start: number; end: number; display: string; target: string; kind: "vault" | "external" }> = [];
+		const patterns = [
+			/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g,
+			/(^|[\s(>])((?:\.?\/)?[^\s()[\]{}<>`",;]+\/[^\s()[\]{}<>`",;]+)(?=$|[\s),:;!?<])/g,
+			/(^|[\s(>])((?:\.?\/)?[^\s()[\]{}<>`",;]+(?:\/[^\s()[\]{}<>`",;]+)*\.[A-Za-z0-9_-]+)(?=$|[\s),.:;!?<])/g,
+			/(^|[\s(>])((?:\/|~\/)[^\s()[\]{}<>`",;]+)(?=$|[\s),:;!?<])/g,
+		];
+
+		for (const pattern of patterns) {
+			let match: RegExpExecArray | null;
+			while ((match = pattern.exec(text)) !== null) {
+				const candidate = pattern === patterns[0] ? match[1].trim() : match[2].trim();
+				const resolved = this.resolveFileReference(candidate);
+				if (!resolved) continue;
+
+				const start = pattern === patterns[0]
+					? match.index
+					: match.index + match[1].length;
+				const display = pattern === patterns[0]
+					? (match[2]?.trim() || match[1].trim())
+					: match[2].trim();
+				const end = start + (pattern === patterns[0] ? match[0].length : match[2].length);
+
+				if (matches.some((existing) => !(end <= existing.start || start >= existing.end))) {
+					continue;
+				}
+
+				matches.push({ start, end, display, ...resolved });
+			}
+		}
+
+		return matches.sort((a, b) => a.start - b.start);
+	}
+
+	private resolveFileReference(raw: string): { target: string; kind: "vault" | "external" } | null {
+		const cleaned = raw
+			.replace(/^\.[\/\\]/, "")
+			.replace(/[:@#](\d+[-–]?\d*)$/, "")
+			.trim();
+		if (!cleaned) return null;
+
+		const vaultPath = this.resolveVaultPath(cleaned);
+		if (vaultPath) {
+			return { target: vaultPath, kind: "vault" };
+		}
+
+		const externalPath = this.resolveExternalFilePath(cleaned);
+		if (externalPath) {
+			return { target: externalPath, kind: "external" };
+		}
+
+		return null;
+	}
+
+	private resolveExternalFilePath(raw: string): string | null {
+		if (!this.looksLikeFileReference(raw)) return null;
+
+		const requireFn = (window as Window & { require?: NodeRequire }).require;
+		if (!requireFn) return null;
+
+		try {
+			const path = requireFn("path") as typeof import("path");
+			const fs = requireFn("fs") as typeof import("fs");
+			const expandedRaw = raw.startsWith("~/")
+				? path.join(requireFn("os").homedir(), raw.slice(2))
+				: raw;
+			const candidates = new Set<string>();
+			if (path.isAbsolute(expandedRaw)) {
+				candidates.add(path.normalize(expandedRaw));
+			} else {
+				const basePath = this.getVaultBasePath();
+				if (basePath) candidates.add(path.normalize(path.join(basePath, expandedRaw)));
+				candidates.add(path.normalize(expandedRaw));
+			}
+
+			for (const candidate of candidates) {
+				if (!fs.existsSync(candidate)) continue;
+				try {
+					if (fs.statSync(candidate).isFile()) return candidate;
+				} catch {
+					continue;
+				}
+			}
+		} catch {
+			return null;
+		}
+
+		return null;
+	}
+
+	private looksLikeFileReference(raw: string): boolean {
+		return (
+			raw.includes("/") ||
+			raw.includes("\\") ||
+			raw.startsWith("~/") ||
+			/^[A-Za-z]:[\\/]/.test(raw) ||
+			PaperclipView.FILE_EXT_RE.test(raw)
+		);
+	}
+
+	private getVaultBasePath(): string | null {
+		const adapter = this.app.vault.adapter;
+		return adapter instanceof FileSystemAdapter ? adapter.getBasePath() : null;
+	}
+
+	private async openResolvedFileReference(
+		ref: { target: string; kind: "vault" | "external" },
+	): Promise<void> {
+		if (ref.kind === "vault") {
+			await this.app.workspace.openLinkText(ref.target, "");
+			return;
+		}
+
+		const requireFn = (window as Window & { require?: NodeRequire }).require;
+		if (!requireFn) {
+			new Notice("Opening external files is not available here");
+			return;
+		}
+
+		try {
+			const electron = requireFn("electron") as { shell?: { openPath: (path: string) => Promise<string> } };
+			const result = await electron.shell?.openPath(ref.target);
+			if (result) {
+				new Notice(`Failed to open file: ${result}`);
+			}
+		} catch (e) {
+			new Notice(`Failed to open file: ${String(e)}`);
 		}
 	}
 

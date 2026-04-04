@@ -82,7 +82,7 @@ export class CreateIssueModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("paperclip-create-modal");
-		contentEl.createEl("h3", { text: "Create Paperclip issue" });
+		contentEl.createEl("h3", { text: "Create paperclip issue" });
 
 		new Setting(contentEl)
 			.setName("Title")
@@ -288,8 +288,8 @@ export class CreateIssueModal extends Modal {
 			const item = this.fileAutocompleteEl.createDiv({
 				cls: `paperclip-file-ac-item${i === this.fileAutocompleteIndex ? " is-selected" : ""}`,
 			});
-			item.createDiv({ text: file.basename });
-			if (file.path !== file.basename) {
+			item.createDiv({ text: file.name });
+			if (file.path !== file.name) {
 				item.createSmall({
 					text: file.path,
 					cls: "paperclip-file-suggestion-path",
@@ -363,14 +363,18 @@ export class CreateIssueModal extends Modal {
 		const lineHeight = this.getTextareaLineHeight(textarea);
 		const desiredTop = coords.top + lineHeight + 6;
 
-		dropdown.style.width = `${dropdownWidth}px`;
-		dropdown.style.left = `${Math.min(coords.left, maxLeft)}px`;
-		dropdown.style.top = `${Math.min(desiredTop, textarea.clientHeight - 12)}px`;
+		dropdown.setCssProps({
+			width: `${dropdownWidth}px`,
+			left: `${Math.min(coords.left, maxLeft)}px`,
+			top: `${Math.min(desiredTop, textarea.clientHeight - 12)}px`,
+		});
 
 		const overflowBottom =
 			dropdown.offsetTop + dropdown.offsetHeight - (textarea.clientHeight - 8);
 		if (overflowBottom > 0) {
-			dropdown.style.top = `${Math.max(8, dropdown.offsetTop - overflowBottom)}px`;
+			dropdown.setCssProps({
+				top: `${Math.max(8, dropdown.offsetTop - overflowBottom)}px`,
+			});
 		}
 	}
 
@@ -421,14 +425,16 @@ export class CreateIssueModal extends Modal {
 			"overflowWrap",
 		] as const;
 
-		mirror.style.position = "absolute";
-		mirror.style.visibility = "hidden";
-		mirror.style.pointerEvents = "none";
-		mirror.style.whiteSpace = "pre-wrap";
-		mirror.style.wordBreak = "break-word";
-		mirror.style.overflowWrap = "break-word";
-		mirror.style.top = "0";
-		mirror.style.left = "0";
+		mirror.setCssProps({
+			position: "absolute",
+			visibility: "hidden",
+			pointerEvents: "none",
+			whiteSpace: "pre-wrap",
+			wordBreak: "break-word",
+			overflowWrap: "break-word",
+			top: "0",
+			left: "0",
+		});
 
 		for (const property of properties) {
 			// Mirror textarea layout so span offsets line up with the caret position.

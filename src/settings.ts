@@ -73,7 +73,7 @@ export class PaperclipSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("OpenAI API key")
+			.setName("OpenAI key")
 			.setDesc(
 				"For AI-powered issue creation from selected text",
 			)

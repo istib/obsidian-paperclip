@@ -2,11 +2,34 @@ import { App, TFile } from "obsidian";
 
 export const FILE_EXT_RE = /\.(md|txt|pdf|png|jpg|jpeg|gif|csv|json|yaml|yml|ts|tsx|js|jsx|mjs|cjs|css|scss|less|html|py|go|rs|rb|swift|vue|svelte|sh|bash|zsh|sql|toml|ini|xml|svg|canvas|c|cpp|h|hpp|java|kt|r|lua|zig|ex|exs|erl|hs|ml|tf|env|log|conf|cfg|properties)$/i;
 
-export function resolveVaultPath(app: App, raw: string): string | null {
-	let cleaned = raw.replace(/^\.[\/\\]/, "").replace(/[:@#](\d+[-–]?\d*)$/, "").trim();
+function findVaultFile(app: App, raw: string): TFile | null {
+	const cleaned = raw.trim().replace(/^\.[/\\]/, "");
 	if (!cleaned) return null;
 
-	if (app.vault.getAbstractFileByPath(cleaned)) return cleaned;
+	const lower = cleaned.toLowerCase();
+	const files = app.vault.getFiles();
+
+	const exactPath = files.find((file) => file.path.toLowerCase() === lower);
+	if (exactPath) return exactPath;
+
+	const exactName = files.find((file) => file.name.toLowerCase() === lower);
+	if (exactName) return exactName;
+
+	const exactBase = files.find((file) => file.basename.toLowerCase() === lower);
+	if (exactBase) return exactBase;
+
+	const suffixPath = files.find((file) => file.path.toLowerCase().endsWith(`/${lower}`));
+	if (suffixPath) return suffixPath;
+
+	return null;
+}
+
+export function resolveVaultPath(app: App, raw: string): string | null {
+	let cleaned = raw.replace(/^\.[/\\]/, "").replace(/[:@#](\d+[-–]?\d*)$/, "").trim();
+	if (!cleaned) return null;
+
+	const directMatch = findVaultFile(app, cleaned);
+	if (directMatch) return directMatch.path;
 
 	const resolved = app.metadataCache.getFirstLinkpathDest(cleaned, "");
 	if (resolved) return resolved.path;
@@ -72,7 +95,8 @@ export function getVaultFileSuggestions(app: App, query: string, limit = 20): TF
 			if (!normalized) return true;
 			const path = file.path.toLowerCase();
 			const base = file.basename.toLowerCase();
-			return path.includes(normalized) || base.includes(normalized);
+			const name = file.name.toLowerCase();
+			return path.includes(normalized) || base.includes(normalized) || name.includes(normalized);
 		})
 		.sort((a, b) => {
 			const scoreDiff =

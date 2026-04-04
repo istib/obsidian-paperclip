@@ -381,6 +381,42 @@
 	border-radius: var(--radius-s);
 }
 
+.paperclip-description-body {
+	position: relative;
+}
+
+.paperclip-description-body.is-collapsed {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	overflow: hidden;
+}
+
+.paperclip-description-body.is-collapsed::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 2.4em;
+	background: linear-gradient(to bottom, rgba(0, 0, 0, 0), var(--background-secondary));
+	pointer-events: none;
+}
+
+.paperclip-description-toggle {
+	margin-top: 8px;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--text-accent);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.paperclip-description-toggle:hover {
+	text-decoration: underline;
+}
+
 .paperclip-actions {
 	display: flex;
 	gap: 6px;
@@ -434,6 +470,10 @@
 	border-left: 3px solid var(--background-modifier-border);
 }
 
+.paperclip-comment-clickable {
+	cursor: pointer;
+}
+
 .paperclip-comment.is-agent {
 	border-left-color: var(--interactive-accent);
 }
@@ -476,6 +516,29 @@
 	gap: 6px;
 	flex: 1;
 	min-width: 0;
+}
+
+.paperclip-comment-meta.is-folded {
+	align-items: center;
+}
+
+.paperclip-comment-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 6px;
+	flex-shrink: 0;
+}
+
+.paperclip-comment-action {
+	padding: 2px;
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+}
+
+.paperclip-comment-action:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
 }
 
 .paperclip-comment-author {

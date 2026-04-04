@@ -34,13 +34,13 @@ export default class PaperclipPlugin extends Plugin {
 			BOARD_VIEW_TYPE,
 			(leaf) => new PaperclipView(leaf, this, {
 				viewType: BOARD_VIEW_TYPE,
-				displayText: "Paperclip Board",
+				displayText: "Paperclip board",
 				boardView: true,
 			}),
 		);
 
 		// Ribbon icon
-		this.addRibbonIcon("paperclip", "Open Paperclip", () => {
+		this.addRibbonIcon("paperclip", "Open paperclip", () => {
 			void this.activateIssueBrowser();
 		});
 
@@ -207,7 +207,7 @@ export default class PaperclipPlugin extends Plugin {
 	): Promise<void> {
 		const openaiKey = this.settings.openaiApiKey;
 		if (!openaiKey) {
-			new Notice("Set your OpenAI API key in Paperclip settings first");
+			new Notice("Set your OpenAI key in the plugin settings first");
 			return;
 		}
 
