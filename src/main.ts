@@ -188,7 +188,7 @@ export default class PaperclipPlugin extends Plugin {
 	): Promise<void> {
 		const openaiKey = this.settings.openaiApiKey;
 		if (!openaiKey) {
-			new Notice("Paperclip: set your OpenAI API key in settings first");
+			new Notice("Set your OpenAI API key in Paperclip settings first");
 			return;
 		}
 

@@ -34,7 +34,8 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 ![Create issue modal with title, description, project, and assignee fields](screenshots/obsidian-paperclip-create-issue.png)
 
 - Create issues with title, description, priority, project, and assignee.
-- **Attach vault context** — optionally include the current file path in the issue description.
+- **Attach vault context** — type `[[` in the description to autocomplete vault files inline, or use the file picker to insert them as context.
+- **Include current file** — optionally attach the active note automatically as a wiki-link in the issue description.
 - Assign to an AI agent, yourself, or leave unassigned.
 
 ### AI-powered actions (optional)

@@ -1,6 +1,11 @@
 import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer } from "obsidian";
 import type PaperclipPlugin from "../main";
 import type { Company, Issue, Agent, Comment, Project, CreateIssueData } from "../api";
+import {
+	FILE_EXT_RE as VAULT_FILE_EXT_RE,
+	extractReferencedVaultFiles,
+	resolveVaultPath as resolveVaultPathHelper,
+} from "../utils/vaultContext";
 import { AssignModal, ASSIGN_TO_ME } from "./AssignModal";
 import { CreateIssueModal } from "./CreateIssueModal";
 import { ProjectModal } from "./ProjectModal";
@@ -46,6 +51,10 @@ export class PaperclipView extends ItemView {
 	private collapsedGroups: Set<string> = new Set();
 	/** Whether the inline comment form is currently open */
 	private commentFormOpen = false;
+	/** Whether the activity thread is expanded (true) or folded with previews (false) */
+	private activityExpanded = false;
+	/** Comments individually expanded while the thread is collapsed */
+	private expandedCommentIds: Set<string> = new Set();
 	/** Issues related to the currently active file */
 	private relatedIssues: Issue[] = [];
 	/** Path of the file whose related issues are currently loaded */
@@ -992,11 +1001,10 @@ export class PaperclipView extends ItemView {
 		});
 
 		// Inline comment form (hidden by default)
-		const formWrapper = container.createDiv({ cls: "paperclip-inline-comment-wrapper" });
-		formWrapper.style.display = "none";
+		const formWrapper = container.createDiv({ cls: "paperclip-inline-comment-wrapper is-hidden" });
 		addCommentBtn.addEventListener("click", () => {
-			const isHidden = formWrapper.style.display === "none";
-			formWrapper.style.display = isHidden ? "" : "none";
+			const isHidden = formWrapper.hasClass("is-hidden");
+			formWrapper.toggleClass("is-hidden", !isHidden);
 			addCommentBtn.setText(isHidden ? "Cancel" : "Add comment");
 			addCommentBtn.toggleClass("mod-cta", isHidden);
 			addCommentBtn.toggleClass("mod-warning", !isHidden);
@@ -1008,9 +1016,28 @@ export class PaperclipView extends ItemView {
 		});
 		this.renderInlineCommentForm(formWrapper, issue);
 
+		// Referenced files from comments
+		this.renderReferencedFiles(container, issue);
+
 		// Comments thread
 		const thread = container.createDiv({ cls: "paperclip-comments" });
-		thread.createEl("h4", { text: `Activity (${this.comments.length})` });
+
+		// Header row with toggle
+		const threadHeader = thread.createDiv({ cls: "paperclip-comments-header" });
+		threadHeader.createEl("h4", { text: `Activity (${this.comments.length})` });
+		if (this.comments.length > 0) {
+			const toggleBtn = threadHeader.createEl("button", {
+				cls: "paperclip-activity-toggle clickable-icon",
+				attr: { "aria-label": this.activityExpanded ? "Collapse" : "Expand" },
+			});
+			setIcon(toggleBtn, this.activityExpanded ? "chevrons-down-up" : "chevrons-up-down");
+			toggleBtn.addEventListener("click", () => {
+				this.activityExpanded = !this.activityExpanded;
+				this.expandedCommentIds.clear();
+				this.render();
+			});
+		}
+
 		if (this.comments.length === 0) {
 			thread.createDiv({
 				cls: "paperclip-empty",
@@ -1029,9 +1056,23 @@ export class PaperclipView extends ItemView {
 					.toUpperCase()
 					.slice(0, 2);
 
+				const commentExpanded = this.activityExpanded || this.expandedCommentIds.has(c.id);
 				const card = thread.createDiv({
-					cls: `paperclip-comment ${isAgent ? "is-agent" : "is-user"}`,
+					cls: `paperclip-comment ${isAgent ? "is-agent" : "is-user"}${commentExpanded ? "" : " is-folded"}`,
 				});
+
+				// Click folded comment to expand just that one
+				if (!this.activityExpanded) {
+					card.style.cursor = "pointer";
+					card.addEventListener("click", () => {
+						if (this.expandedCommentIds.has(c.id)) {
+							this.expandedCommentIds.delete(c.id);
+						} else {
+							this.expandedCommentIds.add(c.id);
+						}
+						this.render();
+					});
+				}
 
 				// Avatar + header row
 				const cHeader = card.createDiv({ cls: "paperclip-comment-header" });
@@ -1051,22 +1092,52 @@ export class PaperclipView extends ItemView {
 				});
 				dateSpan.title = new Date(c.createdAt).toLocaleString();
 
-				const cBody = card.createDiv({ cls: "paperclip-comment-body" });
-				void MarkdownRenderer.render(
-					this.app,
-					c.body,
-					cBody,
-					"",
-					this,
-				);
-				this.linkifyVaultPaths(cBody);
+				if (commentExpanded) {
+					// Full rendered markdown body
+					const cBody = card.createDiv({ cls: "paperclip-comment-body" });
+					void MarkdownRenderer.render(
+						this.app,
+						c.body,
+						cBody,
+						"",
+						this,
+					);
+					this.linkifyVaultPaths(cBody);
+				} else {
+					// Folded: short plain-text preview
+					const plain = c.body
+						.replace(/```[\s\S]*?```/g, " ")
+						.replace(/`[^`]+`/g, (m) => m.slice(1, -1))
+						.replace(/[#*_~>\[\]!|-]+/g, "")
+						.replace(/\n+/g, " ")
+						.trim();
+					const preview = plain.length > 120 ? plain.slice(0, 120) + "\u2026" : plain;
+					if (preview) {
+						cHeader.createSpan({
+							cls: "paperclip-comment-preview",
+							text: " \u2014 " + preview,
+						});
+					}
+				}
 			}
 		}
 	}
 
 	private renderInlineCommentForm(container: HTMLElement, issue: Issue): void {
 		let commentBody = "";
-		let selectedAgentId = "";
+
+		// Default to the latest agent on this issue: most recent agent commenter, or current assignee
+		let defaultAgentId = "";
+		for (let i = this.comments.length - 1; i >= 0; i--) {
+			if (this.comments[i].authorAgentId) {
+				defaultAgentId = this.comments[i].authorAgentId!;
+				break;
+			}
+		}
+		if (!defaultAgentId && issue.assigneeAgentId) {
+			defaultAgentId = issue.assigneeAgentId;
+		}
+		let selectedAgentId = defaultAgentId;
 
 		const form = container.createDiv({ cls: "paperclip-inline-comment" });
 
@@ -1081,6 +1152,7 @@ export class PaperclipView extends ItemView {
 				const opt = dd.createEl("option", { text: `${a.name} (${a.role})` });
 				opt.value = a.id;
 			}
+			if (defaultAgentId) dd.value = defaultAgentId;
 			dd.addEventListener("change", () => { selectedAgentId = dd.value; });
 		}
 
@@ -1092,13 +1164,12 @@ export class PaperclipView extends ItemView {
 		});
 
 		// Autocomplete dropdown for @mentions
-		const acDropdown = textareaWrapper.createDiv({ cls: "paperclip-mention-ac" });
-		acDropdown.style.display = "none";
+		const acDropdown = textareaWrapper.createDiv({ cls: "paperclip-mention-ac is-hidden" });
 		let acIndex = 0;
 		let acMatches: Agent[] = [];
 
 		const dismissAc = () => {
-			acDropdown.style.display = "none";
+			acDropdown.addClass("is-hidden");
 			acMatches = [];
 		};
 
@@ -1122,7 +1193,7 @@ export class PaperclipView extends ItemView {
 		const renderAc = () => {
 			acDropdown.empty();
 			if (acMatches.length === 0) { dismissAc(); return; }
-			acDropdown.style.display = "";
+			acDropdown.removeClass("is-hidden");
 			for (let i = 0; i < acMatches.length; i++) {
 				const agent = acMatches[i];
 				const item = acDropdown.createDiv({
@@ -1153,6 +1224,9 @@ export class PaperclipView extends ItemView {
 		});
 
 		textarea.addEventListener("keydown", (e) => {
+			// Stop propagation so Obsidian doesn't intercept standard editor keys
+			// (Cmd+Left/Right, Cmd+A, Option+arrows, Shift+arrows, etc.)
+			e.stopPropagation();
 			if (acMatches.length === 0) return;
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
@@ -1215,6 +1289,42 @@ export class PaperclipView extends ItemView {
 		});
 	}
 
+	private static readonly FILE_EXT_RE = VAULT_FILE_EXT_RE;
+
+	/** Try to resolve a candidate string to a vault file path; returns the path or null */
+	private resolveVaultPath(raw: string): string | null {
+		return resolveVaultPathHelper(this.app, raw);
+	}
+
+	/** Extract unique vault file paths referenced in comments and the issue description */
+	private collectReferencedFiles(issue: Issue): string[] {
+		const sources: string[] = [];
+		if (issue.description) sources.push(issue.description);
+		for (const comment of this.comments) sources.push(comment.body);
+		return extractReferencedVaultFiles(this.app, sources);
+	}
+
+	private renderReferencedFiles(container: HTMLElement, issue: Issue): void {
+		const files = this.collectReferencedFiles(issue);
+		if (files.length === 0) return;
+
+		const section = container.createDiv({ cls: "paperclip-ref-files" });
+		section.createEl("h4", { text: `Referenced Files (${files.length})` });
+		const list = section.createEl("ul", { cls: "paperclip-ref-files-list" });
+		for (const filePath of files) {
+			const li = list.createEl("li");
+			const link = li.createEl("a", {
+				cls: "paperclip-ref-file-link",
+				text: filePath,
+				href: "#",
+			});
+			link.addEventListener("click", (e) => {
+				e.preventDefault();
+				void this.app.workspace.openLinkText(filePath, "");
+			});
+		}
+	}
+
 	/** Convert file paths in rendered markdown <code> elements into clickable vault links */
 	private linkifyVaultPaths(el: HTMLElement): void {
 		const codeEls = el.querySelectorAll("code");
@@ -1223,17 +1333,16 @@ export class PaperclipView extends ItemView {
 			// Match paths that look like vault files (contain / or end with common extensions)
 			if (
 				!text.includes("/") &&
-				!/\.(md|txt|pdf|png|jpg|csv|json|yaml|yml)$/i.test(text)
+				!PaperclipView.FILE_EXT_RE.test(text)
 			) continue;
-			// Check if file exists in vault
-			const file = this.app.vault.getAbstractFileByPath(text);
-			if (!file) continue;
+			const resolved = this.resolveVaultPath(text);
+			if (!resolved) continue;
 			code.addClass("paperclip-vault-link");
-			code.title = `Open ${text}`;
-		code.addEventListener("click", (e) => {
+			code.title = `Open ${resolved}`;
+			code.addEventListener("click", (e) => {
 				e.preventDefault();
 				e.stopPropagation();
-				void this.app.workspace.openLinkText(text, "");
+				void this.app.workspace.openLinkText(resolved, "");
 			});
 		}
 	}

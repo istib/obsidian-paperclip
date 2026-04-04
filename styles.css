@@ -376,12 +376,42 @@
 }
 
 /* ── Activity / Comments ────────────────────────────────────── */
-.paperclip-comments h4 {
-	margin: 0 0 8px 0;
+.paperclip-comments-header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 8px;
+}
+
+.paperclip-comments-header h4 {
+	margin: 0;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
+}
+
+.paperclip-activity-toggle {
+	margin-left: auto;
+}
+
+.paperclip-comment.is-folded {
+	padding: 6px 10px 6px 12px;
+	margin-bottom: 2px;
+}
+
+.paperclip-comment.is-folded .paperclip-comment-header {
+	margin-bottom: 0;
+}
+
+.paperclip-comment-preview {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
 }
 
 .paperclip-comment {
@@ -460,6 +490,9 @@
 .paperclip-comment-body {
 	font-size: var(--font-ui-small);
 	padding-left: 32px;
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
 }
 
 /* ── Active run banner (detail view) ─────────────────────────── */
@@ -570,16 +603,19 @@
 /* ── Create issue modal ───────────────────────────────────── */
 .paperclip-create-modal .setting-item {
 	flex-direction: column;
-	align-items: flex-start;
+	align-items: stretch;
 	gap: 4px;
+	width: 100%;
 }
 
 .paperclip-create-modal .setting-item-info {
 	padding-right: 0;
+	width: 100%;
 }
 
 .paperclip-create-modal .setting-item-control {
 	width: 100%;
+	align-self: stretch;
 }
 
 .paperclip-create-modal .setting-item-control input[type="text"],
@@ -590,6 +626,60 @@
 .paperclip-create-modal .setting-item-control textarea {
 	width: 100%;
 	min-height: 150px;
+}
+
+.paperclip-create-field {
+	width: 100%;
+	margin: 12px 0;
+}
+
+.paperclip-create-field-label {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	margin-bottom: 6px;
+}
+
+/* ── Referenced files section ──────────────────────────────── */
+.paperclip-ref-files {
+	margin-bottom: 12px;
+}
+
+.paperclip-ref-files h4 {
+	margin: 0 0 6px 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.paperclip-ref-files-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.paperclip-ref-files-list li {
+	padding: 3px 8px;
+	border-radius: var(--radius-s);
+}
+
+.paperclip-ref-files-list li:hover {
+	background: var(--background-modifier-hover);
+}
+
+.paperclip-ref-file-link {
+	font-size: var(--font-ui-small);
+	font-family: var(--font-monospace);
+	color: var(--text-accent);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.paperclip-ref-file-link:hover {
+	text-decoration: underline;
 }
 
 /* ── Add-comment toggle button ─────────────────────────────── */
@@ -663,6 +753,14 @@
 	position: relative;
 }
 
+.paperclip-create-textarea-shell textarea {
+	display: block;
+	width: 100%;
+	min-height: 150px;
+	margin-bottom: 0;
+	resize: vertical;
+}
+
 .paperclip-mention-ac {
 	position: absolute;
 	left: 0;
@@ -690,9 +788,53 @@
 	color: var(--text-on-accent);
 }
 
+.paperclip-file-ac {
+	position: absolute;
+	min-width: 280px;
+	max-width: min(420px, calc(100% - 16px));
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	max-height: 260px;
+	overflow-y: auto;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.paperclip-file-ac-item {
+	padding: 6px 8px;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.paperclip-file-ac-item:hover,
+.paperclip-file-ac-item.is-selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.paperclip-file-suggestion-path {
+	font-size: 10px;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+}
+
+.paperclip-file-ac-item:hover .paperclip-file-suggestion-path,
+.paperclip-file-ac-item.is-selected .paperclip-file-suggestion-path {
+	color: var(--text-on-accent);
+	opacity: 0.85;
+}
+
 .paperclip-create-option {
 	color: var(--text-accent);
 	font-style: italic;
+}
+
+/* ── Utility ───────────────────────────────────────────────── */
+.is-hidden {
+	display: none;
 }
 
 /* ── Kanban board ───────────────────────────────────────────── */
