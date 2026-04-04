@@ -5,7 +5,7 @@ import {
 	DEFAULT_SETTINGS,
 	PaperclipSettingTab,
 } from "./settings";
-import { PaperclipView, VIEW_TYPE } from "./views/PaperclipView";
+import { PaperclipView, VIEW_TYPE, BOARD_VIEW_TYPE } from "./views/PaperclipView";
 import { CreateIssueModal } from "./views/CreateIssueModal";
 import { SearchIssueModal } from "./views/SearchIssueModal";
 import type { Agent, Project } from "./api";
@@ -22,19 +22,39 @@ export default class PaperclipPlugin extends Plugin {
 			this.settings.apiKey || undefined,
 		);
 
-		// Register the sidebar view
-		this.registerView(VIEW_TYPE, (leaf) => new PaperclipView(leaf, this));
+		// Register the sidebar issue browser and full-page board
+		this.registerView(
+			VIEW_TYPE,
+			(leaf) => new PaperclipView(leaf, this, {
+				viewType: VIEW_TYPE,
+				displayText: "Paperclip",
+			}),
+		);
+		this.registerView(
+			BOARD_VIEW_TYPE,
+			(leaf) => new PaperclipView(leaf, this, {
+				viewType: BOARD_VIEW_TYPE,
+				displayText: "Paperclip Board",
+				boardView: true,
+			}),
+		);
 
 		// Ribbon icon
 		this.addRibbonIcon("paperclip", "Open Paperclip", () => {
-			void this.activateView();
+			void this.activateIssueBrowser();
 		});
 
 		// Commands
 		this.addCommand({
 			id: "open-issue-browser",
 			name: "Open issue browser",
-			callback: () => { void this.activateView(); },
+			callback: () => { void this.activateIssueBrowser(); },
+		});
+
+		this.addCommand({
+			id: "open-board",
+			name: "Open kanban board",
+			callback: () => { void this.activateBoardView(); },
 		});
 
 		this.addCommand({
@@ -131,10 +151,9 @@ export default class PaperclipPlugin extends Plugin {
 	}
 
 	private async openCreateIssue(): Promise<void> {
-		// If the sidebar view exists, delegate to it (it has agents cached)
-		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-		if (leaves.length > 0) {
-			const view = leaves[0].view as PaperclipView;
+		// If a Paperclip view exists, delegate to it (it has agents cached)
+		const view = this.getOpenPaperclipView();
+		if (view) {
 			view.openCreateIssueModal();
 			return;
 		}
@@ -198,9 +217,8 @@ export default class PaperclipPlugin extends Plugin {
 			let projects: Project[] = [];
 			let companyId = "";
 
-			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-			if (leaves.length > 0) {
-				const view = leaves[0].view as PaperclipView;
+			const view = this.getOpenPaperclipView();
+			if (view) {
 				agents = view.getAgents();
 				projects = view.getProjects();
 				companyId = view.getSelectedCompanyId();
@@ -363,11 +381,8 @@ File: ${filePath}`,
 
 	private async openSearchIssues(): Promise<void> {
 		try {
-			// Prefer cached issues from the sidebar view
-			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-			let issues = leaves.length > 0
-				? (leaves[0].view as PaperclipView).getIssues()
-				: [];
+			// Prefer cached issues from any open Paperclip view
+			let issues = this.getOpenPaperclipView()?.getIssues() ?? [];
 
 			// Fall back to a fresh fetch if the view isn't open / cache is empty
 			if (issues.length === 0) {
@@ -382,7 +397,7 @@ File: ${filePath}`,
 			}
 
 		new SearchIssueModal(this.app, issues, (issue) => {
-				void this.activateView().then(() => {
+				void this.activateIssueBrowser().then(() => {
 					const viewLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
 					if (viewLeaves.length > 0) {
 						(viewLeaves[0].view as PaperclipView).selectIssue(issue);
@@ -394,15 +409,49 @@ File: ${filePath}`,
 		}
 	}
 
-	private async activateView(): Promise<void> {
+	private getOpenPaperclipView(): PaperclipView | null {
+		const leaves = [
+			...this.app.workspace.getLeavesOfType(VIEW_TYPE),
+			...this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE),
+		];
+		const view = leaves[0]?.view;
+		return view instanceof PaperclipView ? view : null;
+	}
+
+	async activateIssueBrowser(sourceView?: PaperclipView): Promise<void> {
 		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE);
 		if (existing.length > 0) {
+			if (sourceView) {
+				await (existing[0].view as PaperclipView).syncContextFrom(sourceView);
+			}
 			await this.app.workspace.revealLeaf(existing[0]);
 			return;
 		}
 		const leaf = this.app.workspace.getRightLeaf(false);
 		if (leaf) {
 			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+			if (sourceView && leaf.view instanceof PaperclipView) {
+				await leaf.view.syncContextFrom(sourceView);
+			}
+			await this.app.workspace.revealLeaf(leaf);
+		}
+	}
+
+	async activateBoardView(sourceView?: PaperclipView): Promise<void> {
+		const existing = this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE);
+		if (existing.length > 0) {
+			if (sourceView) {
+				await (existing[0].view as PaperclipView).syncContextFrom(sourceView);
+			}
+			await this.app.workspace.revealLeaf(existing[0]);
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf("tab");
+		if (leaf) {
+			await leaf.setViewState({ type: BOARD_VIEW_TYPE, active: true });
+			if (sourceView && leaf.view instanceof PaperclipView) {
+				await leaf.view.syncContextFrom(sourceView);
+			}
 			await this.app.workspace.revealLeaf(leaf);
 		}
 	}

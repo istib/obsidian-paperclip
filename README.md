@@ -97,6 +97,7 @@ Open **Settings → Paperclip** to configure:
 | Command | Description |
 |---|---|
 | `Paperclip: Open issue browser` | Open the sidebar panel |
+| `Paperclip: Open kanban board` | Open the kanban board in a full-page tab |
 | `Paperclip: Create issue` | Open the create-issue modal |
 | `Paperclip: Work on this document (AI)` | Create a task from the active note |
 | `Paperclip: Review this document (AI)` | Request a review of the active note |
@@ -111,7 +112,7 @@ Right-click in the editor to access:
 
 ### Kanban board
 
-Toggle between list and kanban views using the board icon in the header. Drag cards between columns to update issue status.
+Open the board from the issue browser header or with the `Paperclip: Open kanban board` command. The kanban board now opens in a full-page tab, and you can drag cards between columns to update issue status.
 
 ## Requirements
 

@@ -51,6 +51,18 @@
 	font-size: var(--font-ui-small);
 }
 
+.paperclip-container-board {
+	height: 100%;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.paperclip-container-board .paperclip-header {
+	margin-bottom: 0;
+}
+
 /* ── Header ─────────────────────────────────────────────────── */
 .paperclip-header {
 	display: flex;
@@ -515,8 +527,12 @@
 
 /* ── Running indicator (list view) ──────────────────────────── */
 .paperclip-issue-row.is-running {
-	background: var(--background-secondary);
+	background: color-mix(in srgb, var(--color-blue) 10%, var(--background-primary));
 	border-left: 3px solid var(--color-blue);
+}
+
+.paperclip-issue-row.is-running:hover {
+	background: color-mix(in srgb, var(--color-blue) 14%, var(--background-primary));
 }
 
 .paperclip-running-dot {
@@ -847,12 +863,27 @@
 	align-items: flex-start;
 }
 
+.paperclip-container-board .kb-board {
+	flex: 1;
+	min-height: 0;
+	gap: 12px;
+	padding-bottom: 0;
+}
+
 .kb-col {
 	flex: 0 0 200px;
 	min-width: 160px;
 	display: flex;
 	flex-direction: column;
 	max-height: calc(100vh - 140px);
+}
+
+.paperclip-container-board .kb-col {
+	flex: 1 1 280px;
+	min-width: 240px;
+	max-width: 360px;
+	max-height: none;
+	min-height: 0;
 }
 
 .kb-col-header {
@@ -889,6 +920,11 @@
 	border-radius: var(--radius-s);
 	overflow-y: auto;
 	transition: background 0.15s;
+}
+
+.paperclip-container-board .kb-col-body {
+	flex: 1;
+	padding: 4px;
 }
 
 .kb-col-body.kb-drag-over {

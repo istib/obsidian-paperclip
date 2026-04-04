@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+### Added
+- Full-page kanban board view, available from the header toggle or the `Paperclip: Open kanban board` command
+
 ## 0.4.0
 
 ### Fixed

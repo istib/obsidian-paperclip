@@ -11,9 +11,9 @@ import { CreateIssueModal } from "./CreateIssueModal";
 import { ProjectModal } from "./ProjectModal";
 
 export const VIEW_TYPE = "paperclip-view";
+export const BOARD_VIEW_TYPE = "paperclip-board-view";
 
 type StatusFilter = "active" | "all" | "done";
-type ViewMode = "list" | "kanban";
 type GroupBy = "status" | "project" | "assignee";
 type SortBy = "updated" | "created" | "priority";
 
@@ -29,6 +29,9 @@ const KANBAN_STATUSES = [
 
 export class PaperclipView extends ItemView {
 	plugin: PaperclipPlugin;
+	private readonly viewTypeName: string;
+	private readonly displayText: string;
+	private readonly boardView: boolean;
 
 	private companies: Company[] = [];
 	private agents: Agent[] = [];
@@ -37,7 +40,6 @@ export class PaperclipView extends ItemView {
 	private selectedCompanyId = "";
 	private selectedProjectId = "";
 	private statusFilter: StatusFilter = "all";
-	private viewMode: ViewMode = "list";
 	private groupBy: GroupBy = "status";
 	private sortBy: SortBy = "updated";
 	private selectedIssue: Issue | null = null;
@@ -60,16 +62,43 @@ export class PaperclipView extends ItemView {
 	/** Path of the file whose related issues are currently loaded */
 	private relatedFilePath: string | null = null;
 
-	constructor(leaf: WorkspaceLeaf, plugin: PaperclipPlugin) {
+	constructor(
+		leaf: WorkspaceLeaf,
+		plugin: PaperclipPlugin,
+		options?: {
+			viewType?: string;
+			displayText?: string;
+			boardView?: boolean;
+		},
+	) {
 		super(leaf);
 		this.plugin = plugin;
+		this.viewTypeName = options?.viewType ?? VIEW_TYPE;
+		this.displayText = options?.displayText ?? "Paperclip";
+		this.boardView = options?.boardView ?? false;
+		this.statusFilter = this.boardView ? "all" : "active";
 	}
 
 	// Public accessors for main.ts AI features
 	getAgents(): Agent[] { return this.agents; }
 	getProjects(): Project[] { return this.projects; }
 	getSelectedCompanyId(): string { return this.selectedCompanyId; }
+	getSelectedProjectId(): string { return this.selectedProjectId; }
+	getSortBy(): SortBy { return this.sortBy; }
 	getIssues(): Issue[] { return this.issues; }
+
+	async syncContextFrom(other: PaperclipView): Promise<void> {
+		this.selectedCompanyId = other.getSelectedCompanyId();
+		this.selectedProjectId = other.getSelectedProjectId();
+		this.sortBy = other.getSortBy();
+		this.selectedIssue = null;
+		if (!this.selectedCompanyId) return;
+		await this.loadAgents();
+		await this.loadProjects();
+		await this.loadIssues();
+		if (this.boardView) this.loadContributors();
+		this.render();
+	}
 
 	/** Open the detail view for a specific issue */
 	selectIssue(issue: Issue): void {
@@ -78,11 +107,11 @@ export class PaperclipView extends ItemView {
 	}
 
 	getViewType(): string {
-		return VIEW_TYPE;
+		return this.viewTypeName;
 	}
 
 	getDisplayText(): string {
-		return "Paperclip";
+		return this.displayText;
 	}
 
 	getIcon(): string {
@@ -91,6 +120,7 @@ export class PaperclipView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		await this.loadCompanies();
+		if (this.boardView) this.loadContributors();
 		this.render();
 		this.startAutoRefresh();
 
@@ -130,6 +160,7 @@ export class PaperclipView extends ItemView {
 				await this.loadAgents();
 				await this.loadProjects();
 				await this.loadIssues();
+				if (this.boardView) this.loadContributors();
 			}
 	} catch (e) {
 			new Notice(`Paperclip: failed to load companies — ${String(e)}`);
@@ -324,6 +355,7 @@ export class PaperclipView extends ItemView {
 	private async doRefresh(): Promise<void> {
 		this.snapshotRunning();
 		await this.loadIssues();
+		if (this.boardView) this.loadContributors();
 		this.detectFinishedRuns();
 		if (this.selectedIssue) {
 			// Refresh the selected issue from latest data
@@ -368,14 +400,16 @@ export class PaperclipView extends ItemView {
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
 		container.addClass("paperclip-container");
+		container.toggleClass("paperclip-container-board", this.boardView);
+		container.toggleClass("paperclip-container-browser", !this.boardView);
 
 		if (this.selectedIssue) {
 			this.renderDetail(container);
-		} else if (this.viewMode === "kanban") {
+		} else if (this.boardView) {
 			this.renderHeader(container);
 			this.renderKanban(container);
 		} else {
-		this.renderHeader(container);
+			this.renderHeader(container);
 			this.renderRelatedIssues(container);
 			this.renderListBody(container);
 		}
@@ -422,8 +456,8 @@ export class PaperclipView extends ItemView {
 			});
 		}
 
-		// Status filter tabs + group-by toggle (only in list mode)
-		if (this.viewMode === "list") {
+		// Status filter tabs + group-by toggle (only in browser view)
+		if (!this.boardView) {
 			const tabs = header.createDiv({ cls: "paperclip-tabs" });
 			const filters: { label: string; value: StatusFilter }[] = [
 				{ label: "Active", value: "active" },
@@ -440,7 +474,6 @@ export class PaperclipView extends ItemView {
 					void this.loadIssues().then(() => this.render());
 				});
 			}
-
 			// Group-by toggle
 			const groupTabs = header.createDiv({ cls: "paperclip-tabs" });
 			const groupOptions: { label: string; value: GroupBy }[] = [
@@ -480,23 +513,20 @@ export class PaperclipView extends ItemView {
 			this.render();
 		});
 
-		// View mode toggle
-		const toggleBtn = headerActions.createEl("button", {
+		const switchViewBtn = headerActions.createEl("button", {
 			cls: "clickable-icon",
-			attr: { "aria-label": this.viewMode === "list" ? "Kanban view" : "List view" },
+			attr: {
+				"aria-label": this.boardView
+					? "Open issue browser"
+					: "Open board",
+			},
 		});
-		setIcon(toggleBtn, this.viewMode === "list" ? "kanban" : "list");
-		toggleBtn.addEventListener("click", () => {
-			this.viewMode = this.viewMode === "list" ? "kanban" : "list";
-			if (this.viewMode === "kanban") {
-				// Kanban always shows all statuses
-				this.statusFilter = "all";
-				void this.loadIssues().then(() => {
-					this.loadContributors();
-					this.render();
-				});
+		setIcon(switchViewBtn, this.boardView ? "list" : "kanban");
+		switchViewBtn.addEventListener("click", () => {
+			if (this.boardView) {
+				void this.plugin.activateIssueBrowser(this);
 			} else {
-				this.render();
+				void this.plugin.activateBoardView(this);
 			}
 		});
 
@@ -518,7 +548,7 @@ export class PaperclipView extends ItemView {
 		setIcon(refreshBtn, "refresh-cw");
 		refreshBtn.addEventListener("click", () => {
 			void this.loadIssues().then(() => {
-				if (this.viewMode === "kanban") this.loadContributors();
+				if (this.boardView) this.loadContributors();
 				this.render();
 				new Notice("Paperclip: refreshed");
 			});

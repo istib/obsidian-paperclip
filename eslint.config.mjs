@@ -1,6 +1,5 @@
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsparser from "@typescript-eslint/parser";
-import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default [
 	{
@@ -13,7 +12,6 @@ export default [
 		},
 		plugins: {
 			"@typescript-eslint": tseslint,
-			obsidianmd,
 		},
 		rules: {
 			"@typescript-eslint/no-floating-promises": "error",
@@ -21,7 +19,6 @@ export default [
 			"@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true, allowBoolean: true }],
 			"no-unused-vars": "off",
 			"@typescript-eslint/no-unused-vars": "error",
-			"obsidianmd/ui/sentence-case": ["warn", { brands: ["Paperclip", "OpenAI"] }],
 		},
 	},
 ];
