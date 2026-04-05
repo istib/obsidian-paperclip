@@ -1539,7 +1539,7 @@ export class PaperclipView extends ItemView {
 
 	private resolveFileReference(raw: string): { target: string; kind: "vault" | "external" } | null {
 		const cleaned = raw
-			.replace(/^\.[\/\\]/, "")
+			.replace(/^\.[/\\]/, "")
 			.replace(/[:@#](\d+[-–]?\d*)$/, "")
 			.trim();
 		if (!cleaned) return null;
@@ -1560,7 +1560,7 @@ export class PaperclipView extends ItemView {
 	private resolveExternalFilePath(raw: string): string | null {
 		if (!this.looksLikeFileReference(raw)) return null;
 
-		const requireFn = (window as Window & { require?: NodeRequire }).require;
+		const requireFn = (window as Window & { require?: NodeJS.Require }).require;
 		if (!requireFn) return null;
 
 		try {
@@ -1616,7 +1616,7 @@ export class PaperclipView extends ItemView {
 			return;
 		}
 
-		const requireFn = (window as Window & { require?: NodeRequire }).require;
+		const requireFn = (window as Window & { require?: NodeJS.Require }).require;
 		if (!requireFn) {
 			new Notice("Opening external files is not available here");
 			return;

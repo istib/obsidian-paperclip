@@ -54,7 +54,7 @@ export function extractReferencedVaultFiles(app: App, sources: string[]): string
 			candidates.add(match[1].trim());
 		}
 
-		const words = src.split(/[\s,;()\[\]{}"'<>]+/);
+		const words = src.split(/[][\s,;(){}"'<>]+/);
 		for (const word of words) {
 			const clean = word.replace(/^[`*_~]+|[`*_~.,:!?]+$/g, "");
 			if (clean && (clean.includes("/") || FILE_EXT_RE.test(clean))) {
