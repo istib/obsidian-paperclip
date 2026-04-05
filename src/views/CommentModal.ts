@@ -72,7 +72,7 @@ export class CommentModal extends Modal {
 		let textarea: ReturnType<typeof Setting.prototype.addTextArea extends (cb: (t: infer T) => void) => unknown ? T : never>;
 		new Setting(contentEl)
 			.setName("Comment body")
-			.setDesc("Write in markdown and mention agents with @name.")
+			.setDesc("Write markdown with agent mentions.")
 			.addTextArea((ta) => {
 				textarea = ta;
 				ta.setPlaceholder("Write your comment…")
