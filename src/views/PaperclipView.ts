@@ -53,6 +53,10 @@ export class PaperclipView extends ItemView {
 	private collapsedGroups: Set<string> = new Set();
 	/** Whether the inline comment form is currently open */
 	private commentFormOpen = false;
+	/** Draft body for the inline comment form */
+	private inlineCommentDraft = "";
+	/** Current assignee selection in the inline comment form */
+	private inlineCommentSelectedAgentId = "";
 	/** Whether the activity thread is expanded (true) or folded with previews (false) */
 	private activityExpanded = false;
 	/** Comments individually expanded while the thread is collapsed */
@@ -104,6 +108,9 @@ export class PaperclipView extends ItemView {
 
 	/** Open the detail view for a specific issue */
 	selectIssue(issue: Issue): void {
+		if (this.selectedIssue?.id !== issue.id) {
+			this.resetInlineCommentState();
+		}
 		this.selectedIssue = issue;
 		this.descriptionExpanded = false;
 		void this.loadComments(issue.id).then(() => this.render());
@@ -711,8 +718,7 @@ export class PaperclipView extends ItemView {
 		const rowCls = `paperclip-issue-row${isRunning ? " is-running" : ""}`;
 		const row = container.createDiv({ cls: rowCls });
 		row.addEventListener("click", () => {
-			this.selectedIssue = issue;
-			void this.loadComments(issue.id).then(() => this.render());
+			this.selectIssue(issue);
 		});
 
 		const left = row.createDiv({ cls: "paperclip-issue-left" });
@@ -834,8 +840,7 @@ export class PaperclipView extends ItemView {
 
 		// Click to open detail
 		card.addEventListener("click", () => {
-			this.selectedIssue = issue;
-			void this.loadComments(issue.id).then(() => this.render());
+			this.selectIssue(issue);
 		});
 
 		// Card top row: identifier + priority
@@ -912,6 +917,7 @@ export class PaperclipView extends ItemView {
 			cls: "paperclip-back",
 		});
 		backBtn.addEventListener("click", () => {
+			this.resetInlineCommentState();
 			this.selectedIssue = null;
 			this.render();
 		});
@@ -1057,15 +1063,19 @@ export class PaperclipView extends ItemView {
 		});
 
 		// Inline comment form (hidden by default)
-		const formWrapper = container.createDiv({ cls: "paperclip-inline-comment-wrapper is-hidden" });
+		addCommentBtn.setText(this.commentFormOpen ? "Cancel" : "Add comment");
+		addCommentBtn.toggleClass("mod-cta", !this.commentFormOpen);
+		addCommentBtn.toggleClass("mod-warning", this.commentFormOpen);
+		const formWrapper = container.createDiv({
+			cls: `paperclip-inline-comment-wrapper${this.commentFormOpen ? "" : " is-hidden"}`,
+		});
 		addCommentBtn.addEventListener("click", () => {
-			const isHidden = formWrapper.hasClass("is-hidden");
-			formWrapper.toggleClass("is-hidden", !isHidden);
-			addCommentBtn.setText(isHidden ? "Cancel" : "Add comment");
-			addCommentBtn.toggleClass("mod-cta", isHidden);
-			addCommentBtn.toggleClass("mod-warning", !isHidden);
-			this.commentFormOpen = isHidden;
-			if (isHidden) {
+			this.commentFormOpen = !this.commentFormOpen;
+			formWrapper.toggleClass("is-hidden", !this.commentFormOpen);
+			addCommentBtn.setText(this.commentFormOpen ? "Cancel" : "Add comment");
+			addCommentBtn.toggleClass("mod-cta", !this.commentFormOpen);
+			addCommentBtn.toggleClass("mod-warning", this.commentFormOpen);
+			if (this.commentFormOpen) {
 				const ta = formWrapper.querySelector("textarea");
 				if (ta) ta.focus();
 			}
@@ -1224,6 +1234,12 @@ export class PaperclipView extends ItemView {
 		this.renderPreservingScroll();
 	}
 
+	private resetInlineCommentState(): void {
+		this.commentFormOpen = false;
+		this.inlineCommentDraft = "";
+		this.inlineCommentSelectedAgentId = "";
+	}
+
 	private async copyCommentBody(body: string): Promise<void> {
 		try {
 			await navigator.clipboard.writeText(body);
@@ -1234,7 +1250,7 @@ export class PaperclipView extends ItemView {
 	}
 
 	private renderInlineCommentForm(container: HTMLElement, issue: Issue): void {
-		let commentBody = "";
+		let commentBody = this.inlineCommentDraft;
 
 		// Default to the latest agent on this issue: most recent agent commenter, or current assignee
 		let defaultAgentId = "";
@@ -1247,7 +1263,7 @@ export class PaperclipView extends ItemView {
 		if (!defaultAgentId && issue.assigneeAgentId) {
 			defaultAgentId = issue.assigneeAgentId;
 		}
-		let selectedAgentId = defaultAgentId;
+		let selectedAgentId = this.inlineCommentSelectedAgentId || defaultAgentId;
 
 		const form = container.createDiv({ cls: "paperclip-inline-comment" });
 
@@ -1262,8 +1278,11 @@ export class PaperclipView extends ItemView {
 				const opt = dd.createEl("option", { text: `${a.name} (${a.role})` });
 				opt.value = a.id;
 			}
-			if (defaultAgentId) dd.value = defaultAgentId;
-			dd.addEventListener("change", () => { selectedAgentId = dd.value; });
+			if (selectedAgentId) dd.value = selectedAgentId;
+			dd.addEventListener("change", () => {
+				selectedAgentId = dd.value;
+				this.inlineCommentSelectedAgentId = selectedAgentId;
+			});
 		}
 
 		// Textarea with @mention autocomplete
@@ -1272,6 +1291,7 @@ export class PaperclipView extends ItemView {
 			cls: "paperclip-inline-textarea",
 			attr: { placeholder: "Write a comment…", rows: "3" },
 		});
+		textarea.value = commentBody;
 
 		// Autocomplete dropdown for @mentions
 		const acDropdown = textareaWrapper.createDiv({ cls: "paperclip-mention-ac is-hidden" });
@@ -1294,6 +1314,7 @@ export class PaperclipView extends ItemView {
 			const insertion = `@${agent.name} `;
 			textarea.value = val.slice(0, atIdx) + insertion + after;
 			commentBody = textarea.value;
+			this.inlineCommentDraft = commentBody;
 			const newCursor = atIdx + insertion.length;
 			textarea.setSelectionRange(newCursor, newCursor);
 			textarea.focus();
@@ -1319,6 +1340,7 @@ export class PaperclipView extends ItemView {
 
 		textarea.addEventListener("input", () => {
 			commentBody = textarea.value;
+			this.inlineCommentDraft = commentBody;
 			if (this.agents.length === 0) return;
 			const cursor = textarea.selectionStart;
 			const before = textarea.value.slice(0, cursor);
@@ -1387,8 +1409,10 @@ export class PaperclipView extends ItemView {
 						new Notice("Comment posted");
 					});
 
-			this.commentFormOpen = false;
 			void action
+				.then(() => {
+					this.resetInlineCommentState();
+				})
 				.then(() => this.loadComments(issue.id))
 				.then(() => this.render())
 				.catch((e: unknown) => {
