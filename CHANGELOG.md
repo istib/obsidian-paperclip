@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.2
+
+### Added
+- BRAT installation instructions in the README for pre-approval installs
+- Reusable screenshot demo seed script for consistent plugin screenshots
+
+### Changed
+- Refresh README screenshots for the current issue list, kanban, issue detail, create, and search views
+
+### Fixed
+- Filter archived companies out of the plugin company selector and related commands
+- Fall back to the first active company when the saved default company is no longer valid
+
 ## 0.4.1
 
 ### Added

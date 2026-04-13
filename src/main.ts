@@ -14,6 +14,18 @@ export default class PaperclipPlugin extends Plugin {
 	settings: PaperclipSettings = DEFAULT_SETTINGS;
 	api: PaperclipApi = new PaperclipApi(DEFAULT_SETTINGS.apiBaseUrl);
 
+	private resolveCompanyId(companies: Company[]): string {
+		if (companies.length === 0) return "";
+		const savedCompanyId = this.settings.defaultCompanyId;
+		if (
+			savedCompanyId &&
+			companies.some((company) => company.id === savedCompanyId)
+		) {
+			return savedCompanyId;
+		}
+		return companies[0]?.id ?? "";
+	}
+
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
@@ -161,8 +173,7 @@ export default class PaperclipPlugin extends Plugin {
 		// Standalone: fetch agents and open modal directly
 		try {
 			const companies = await this.api.listCompanies();
-			const companyId =
-				this.settings.defaultCompanyId || companies[0]?.id;
+			const companyId = this.resolveCompanyId(companies);
 			if (!companyId) {
 				new Notice("Paperclip: no companies found");
 				return;
@@ -232,10 +243,11 @@ export default class PaperclipPlugin extends Plugin {
 			}
 			if (!companyId) {
 				companies = await this.api.listCompanies();
-				companyId = this.settings.defaultCompanyId || companies[0]?.id;
+				companyId = this.resolveCompanyId(companies);
 			}
 			if (companies.length === 0) {
 				companies = await this.api.listCompanies();
+				companyId = this.resolveCompanyId(companies);
 			}
 			if (!companyId) {
 				new Notice("Paperclip: no companies found");
@@ -403,8 +415,7 @@ File: ${filePath}`,
 			// Fall back to a fresh fetch if the view isn't open / cache is empty
 			if (issues.length === 0) {
 				const companies = await this.api.listCompanies();
-				const companyId =
-					this.settings.defaultCompanyId || companies[0]?.id;
+				const companyId = this.resolveCompanyId(companies);
 				if (!companyId) {
 					new Notice("Paperclip: no companies found");
 					return;

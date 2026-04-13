@@ -155,7 +155,8 @@ export class PaperclipApi {
 
 	// Companies
 	async listCompanies(): Promise<Company[]> {
-		return this.request<Company[]>("GET", "/api/companies");
+		const companies = await this.request<Company[]>("GET", "/api/companies");
+		return companies.filter((company) => company.status === "active");
 	}
 
 	// Issues

@@ -929,8 +929,8 @@
 .paperclip-container-board .kb-board {
 	flex: 1;
 	min-height: 0;
-	gap: 12px;
-	padding-bottom: 0;
+	gap: 10px;
+	padding: 0 8px 0;
 }
 
 .kb-col {
@@ -954,8 +954,9 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 6px 8px;
-	margin-bottom: 4px;
+	margin-bottom: 6px;
 	border-bottom: 2px solid var(--background-modifier-border);
+	min-height: 32px;
 }
 
 .kb-col-title {
@@ -987,7 +988,14 @@
 
 .paperclip-container-board .kb-col-body {
 	flex: 1;
-	padding: 4px;
+	padding: 6px;
+	gap: 6px;
+}
+
+.paperclip-container-board .kb-col[data-status="blocked"] .kb-col-body {
+	padding: 8px 6px;
+	gap: 8px;
+	min-height: 80px;
 }
 
 .kb-col-body.kb-drag-over {

@@ -7,11 +7,11 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 ![Obsidian](https://img.shields.io/badge/Obsidian-%23483699.svg?style=flat&logo=obsidian&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-![Issue browser sidebar showing issues grouped by status](screenshots/obsidian-paperclip-list-view.png)
-
 ## Features
 
 ### Issue browser
+
+![Issue browser sidebar showing issues grouped by status](screenshots/obsidian-paperclip-issue-list.png)
 
 - **Sidebar panel** with a live view of all Paperclip issues for your company.
 - **List view** with collapsible groups — group by status, project, or assignee.
@@ -20,9 +20,11 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 - **Status filter tabs** — quickly switch between Active, Done, and All issues.
 - **Project filter** — scope the view to a single project.
 
+![Kanban board with issues organized by status](screenshots/obsidian-paperclip-kanban.png)
+
 ### Issue detail view
 
-![Issue detail view with status, description, and activity thread](screenshots/obsidian-paperclip-issue-view.png)
+![Issue detail view with status, description, and activity thread](screenshots/obsidian-paperclip-issue.png)
 
 - View full issue details including rendered Markdown descriptions.
 - **Inline title editing** — click to rename an issue.
@@ -32,7 +34,7 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 
 ### Issue creation
 
-![Create issue modal with title, description, project, and assignee fields](screenshots/obsidian-paperclip-create-issue.png)
+![Create issue modal with title, description, project, and assignee fields](screenshots/obsidian-paperclip-create.png)
 
 - Create issues with title, description, priority, project, and assignee.
 - **Attach vault context** — type `[[` in the description to autocomplete vault files inline, or use the file picker to insert them as context.
@@ -55,17 +57,24 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 
 ### Comments & collaboration
 
+![Issue search view inside Obsidian](screenshots/obsidian-paperclip-search.png)
+
 - Post comments from the issue detail view.
 - **@mention agents** with clickable chips to insert mentions.
 - **Assign + comment** in a single action — reassign an agent while posting a comment.
 
 ## Installation
 
-### From Obsidian Community Plugins
+### Via BRAT (recommended until community-plugin approval)
 
 1. Open **Settings → Community plugins**.
-2. Click **Browse** and search for **Paperclip**.
-3. Click **Install**, then **Enable**.
+2. Install and enable **BRAT** ("Beta Reviewers Auto-update Tester") from the community plugins browser.
+3. Open **BRAT** settings and choose **Add beta plugin**.
+4. Enter this repository URL: `https://github.com/istib/obsidian-paperclip`
+5. Select **Add plugin**.
+6. In **Settings → Community plugins**, enable **Paperclip**.
+
+BRAT will keep the plugin updated from this repo until Paperclip is approved for the official Obsidian community plugin directory.
 
 ### Manual installation
 

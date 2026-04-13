@@ -148,24 +148,39 @@ export class PaperclipView extends ItemView {
 		this.stopAutoRefresh();
 	}
 
+	private normalizeSelectedCompanyId(): void {
+		if (this.companies.length === 0) {
+			this.selectedCompanyId = "";
+			return;
+		}
+
+		const savedCompanyId = this.plugin.settings.defaultCompanyId;
+		if (
+			savedCompanyId &&
+			!this.selectedCompanyId &&
+			this.companies.some((company) => company.id === savedCompanyId)
+		) {
+			this.selectedCompanyId = savedCompanyId;
+		}
+
+		if (
+			this.selectedCompanyId &&
+			!this.companies.some((company) => company.id === this.selectedCompanyId)
+		) {
+			this.selectedCompanyId = "";
+		}
+
+		if (!this.selectedCompanyId) {
+			this.selectedCompanyId = this.companies[0]?.id ?? "";
+		}
+	}
+
 	// ── Data loading ───────────────────────────────────────────────
 
 	private async loadCompanies(): Promise<void> {
 		try {
 			this.companies = await this.plugin.api.listCompanies();
-			if (
-				this.plugin.settings.defaultCompanyId &&
-				!this.selectedCompanyId
-			) {
-				this.selectedCompanyId =
-					this.plugin.settings.defaultCompanyId;
-			}
-			if (
-				!this.selectedCompanyId &&
-				this.companies.length > 0
-			) {
-				this.selectedCompanyId = this.companies[0].id;
-			}
+			this.normalizeSelectedCompanyId();
 			if (this.selectedCompanyId) {
 				await this.loadAgents();
 				await this.loadProjects();

@@ -1,9 +1,10 @@
 {
 	"name": "obsidian-paperclip",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"description": "Obsidian plugin for Paperclip agent orchestration",
 	"main": "main.js",
 	"scripts": {
+		"seed:screenshot-demo": "node scripts/seed-screenshot-demo.mjs",
 		"dev": "node esbuild.config.mjs",
 		"build": "node esbuild.config.mjs production"
 	},
