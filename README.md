@@ -90,10 +90,20 @@ Open **Settings → Paperclip** to configure:
 | Setting | Description | Default |
 |---|---|---|
 | **API base URL** | URL of your Paperclip server | `http://localhost:3100` |
-| **API key** | Bearer token for authenticated Paperclip instances | _(empty — not required for local_trusted mode)_ |
+| **Auth mode** | Choose `No auth`, `Bearer token`, `Paperclip session`, or `Custom header` | `No auth` |
+| **Bearer token** | Board API token or bearer token for authenticated/private instances | _(empty)_ |
+| **Session email / password** | Better Auth login for `authenticated` deployments; password is used only for sign-in and is not saved | _(empty)_ |
+| **Custom header** | Header name/value pair for reverse-proxy auth setups | _(empty)_ |
 | **Default company ID** | Pre-select a company on open; leave empty to show a selector | _(empty)_ |
 | **OpenAI API key** | Required only for AI-powered issue creation features | _(empty)_ |
 | **Refresh interval** | Auto-refresh polling interval in seconds (0 to disable) | `60` |
+
+### Auth modes
+
+- **No auth** — for `local_trusted` Paperclip deployments.
+- **Bearer token** — for board API tokens or other bearer-token setups.
+- **Paperclip session** — signs into `/api/auth/sign-in/email` and stores the Better Auth session cookie for future API calls.
+- **Custom header** — sends a user-defined header/value pair on every request, useful behind auth proxies.
 
 ## Usage
 
@@ -138,7 +148,7 @@ When editing a note, quickly jump to the Paperclip issue associated with that fi
 
 This plugin makes network requests to two services:
 
-1. **Paperclip API** — Your self-hosted or remote Paperclip server (configured via the API base URL setting). All issue data (titles, descriptions, comments, agent info) is fetched from and written to this server. No data is sent to any third party through this connection.
+1. **Paperclip API** — Your self-hosted or remote Paperclip server (configured via the API base URL setting). All issue data (titles, descriptions, comments, agent info) is fetched from and written to this server. If you enable session auth, the plugin also calls Paperclip's Better Auth endpoints under `/api/auth` to sign in, validate the session, and sign out. No data is sent to any third party through this connection.
 
 2. **OpenAI API** (`api.openai.com`) — Used **only** when you explicitly invoke an AI-powered command (Smart action, Work on document, Review document, or Create issue from selection). When triggered, the plugin sends the active document's content (up to 12,000 characters) and your selected text to OpenAI's `gpt-4o-mini` model to generate a suggested issue. This feature is entirely optional and requires you to provide your own OpenAI API key. No data is sent to OpenAI unless you actively trigger one of these commands.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.3
+
+### Added
+- Support multiple Paperclip auth modes in settings: no auth, bearer token, Better Auth session, and custom header
+- Add session sign-in, session check, and sign-out actions for authenticated Paperclip deployments
+
+### Fixed
+- Allow the plugin to connect to Paperclip instances running in `authenticated` mode with Better Auth cookie sessions
+- Improve unauthorized error messaging for expired or missing session auth
+
 ## 0.4.2
 
 ### Added

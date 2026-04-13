@@ -12,7 +12,14 @@ import type { Agent, Company, Project } from "./api";
 
 export default class PaperclipPlugin extends Plugin {
 	settings: PaperclipSettings = DEFAULT_SETTINGS;
-	api: PaperclipApi = new PaperclipApi(DEFAULT_SETTINGS.apiBaseUrl);
+	api: PaperclipApi = new PaperclipApi({
+		baseUrl: DEFAULT_SETTINGS.apiBaseUrl,
+		authMode: DEFAULT_SETTINGS.authMode,
+		apiKey: DEFAULT_SETTINGS.apiKey,
+		sessionCookie: DEFAULT_SETTINGS.sessionCookie,
+		customAuthHeaderName: DEFAULT_SETTINGS.customAuthHeaderName,
+		customAuthHeaderValue: DEFAULT_SETTINGS.customAuthHeaderValue,
+	});
 
 	private resolveCompanyId(companies: Company[]): string {
 		if (companies.length === 0) return "";
@@ -28,11 +35,7 @@ export default class PaperclipPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
-
-		this.api = new PaperclipApi(
-			this.settings.apiBaseUrl,
-			this.settings.apiKey || undefined,
-		);
+		this.api = new PaperclipApi(this.buildApiConfig());
 
 		// Register the sidebar issue browser and full-page board
 		this.registerView(
@@ -147,19 +150,86 @@ export default class PaperclipPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData(),
-		);
+		const loaded = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+
+		if (
+			loaded &&
+			typeof loaded === "object" &&
+			!("authMode" in (loaded as Record<string, unknown>))
+		) {
+			this.settings.authMode = this.settings.apiKey ? "bearer" : "none";
+		}
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
-		this.api.updateConfig(
-			this.settings.apiBaseUrl,
-			this.settings.apiKey || undefined,
-		);
+		this.api.updateConfig(this.buildApiConfig());
+	}
+
+	getSessionStatusLabel(): string {
+		if (this.settings.authMode !== "session") {
+			return "Session auth is not enabled";
+		}
+		if (!this.settings.sessionCookie) {
+			return "Not signed in";
+		}
+		if (this.settings.sessionUserDisplay) {
+			return `Signed in as ${this.settings.sessionUserDisplay}`;
+		}
+		return "Session cookie saved";
+	}
+
+	async signInWithSession(email: string, password: string): Promise<void> {
+		const session = await this.api.signInEmail(email, password);
+		this.settings.authMode = "session";
+		this.settings.sessionEmail = email;
+		this.settings.sessionCookie = this.api.getSessionCookie();
+		this.settings.sessionUserDisplay =
+			session.user.email ?? session.user.name ?? session.user.id;
+		await this.saveSettings();
+		new Notice(`Signed in to Paperclip as ${this.settings.sessionUserDisplay}`);
+	}
+
+	async refreshSessionStatus(): Promise<void> {
+		if (!this.settings.sessionCookie) {
+			this.settings.sessionUserDisplay = "";
+			await this.saveSettings();
+			new Notice("No Paperclip session is stored");
+			return;
+		}
+		const session = await this.api.getSession();
+		if (!session) {
+			this.settings.sessionCookie = "";
+			this.settings.sessionUserDisplay = "";
+			await this.saveSettings();
+			new Notice("Paperclip session is no longer valid");
+			return;
+		}
+		this.settings.sessionCookie = this.api.getSessionCookie();
+		this.settings.sessionUserDisplay =
+			session.user.email ?? session.user.name ?? session.user.id;
+		await this.saveSettings();
+		new Notice(`Paperclip session is valid for ${this.settings.sessionUserDisplay}`);
+	}
+
+	async signOutSession(): Promise<void> {
+		await this.api.signOutSession();
+		this.settings.sessionCookie = "";
+		this.settings.sessionUserDisplay = "";
+		await this.saveSettings();
+		new Notice("Signed out of Paperclip");
+	}
+
+	private buildApiConfig() {
+		return {
+			baseUrl: this.settings.apiBaseUrl,
+			authMode: this.settings.authMode,
+			apiKey: this.settings.apiKey,
+			sessionCookie: this.settings.sessionCookie,
+			customAuthHeaderName: this.settings.customAuthHeaderName,
+			customAuthHeaderValue: this.settings.customAuthHeaderValue,
+		};
 	}
 
 	private async openCreateIssue(): Promise<void> {

@@ -1,6 +1,29 @@
-import { requestUrl, RequestUrlParam } from "obsidian";
+import { requestUrl, RequestUrlParam, RequestUrlResponse } from "obsidian";
 
 // ── Types ──────────────────────────────────────────────────────────
+
+export type AuthMode = "none" | "bearer" | "session" | "custom_header";
+
+export interface PaperclipApiConfig {
+	baseUrl: string;
+	authMode: AuthMode;
+	apiKey: string;
+	sessionCookie: string;
+	customAuthHeaderName: string;
+	customAuthHeaderValue: string;
+}
+
+export interface AuthSession {
+	session: {
+		id: string;
+		userId: string;
+	};
+	user: {
+		id: string;
+		email: string | null;
+		name: string | null;
+	};
+}
 
 export interface Company {
 	id: string;
@@ -103,17 +126,233 @@ export interface UpdateIssuePatch {
 	comment?: string;
 }
 
+interface RequestOptions {
+	body?: Record<string, unknown>;
+	headers?: Record<string, string>;
+	skipConfiguredAuth?: boolean;
+	sessionCookieOverride?: string;
+}
+
+function sanitizeBaseUrl(baseUrl: string): string {
+	return baseUrl.replace(/\/+$/, "");
+}
+
+function getHeader(
+	headers: Record<string, string>,
+	name: string,
+): string | undefined {
+	const needle = name.toLowerCase();
+	for (const [key, value] of Object.entries(headers)) {
+		if (key.toLowerCase() === needle) return value;
+	}
+	return undefined;
+}
+
+function splitSetCookieHeader(headerValue: string): string[] {
+	const parts: string[] = [];
+	let start = 0;
+	let inExpires = false;
+
+	for (let i = 0; i < headerValue.length; i++) {
+		const next = headerValue.slice(i, i + 8).toLowerCase();
+		if (next === "expires=") {
+			inExpires = true;
+			i += 7;
+			continue;
+		}
+		const char = headerValue[i];
+		if (inExpires && char === ";") {
+			inExpires = false;
+			continue;
+		}
+		if (char !== "," || inExpires) continue;
+		const remainder = headerValue.slice(i + 1);
+		if (/^\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=/.test(remainder)) {
+			parts.push(headerValue.slice(start, i).trim());
+			start = i + 1;
+		}
+	}
+
+	const tail = headerValue.slice(start).trim();
+	if (tail) parts.push(tail);
+	return parts;
+}
+
+function mergeCookieHeader(
+	existingHeader: string,
+	setCookieHeader: string | undefined,
+): string {
+	const cookies = new Map<string, string>();
+
+	for (const pair of existingHeader.split(";")) {
+		const trimmed = pair.trim();
+		if (!trimmed) continue;
+		const eq = trimmed.indexOf("=");
+		if (eq <= 0) continue;
+		cookies.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+	}
+
+	if (setCookieHeader) {
+		for (const cookie of splitSetCookieHeader(setCookieHeader)) {
+			const pair = cookie.split(";", 1)[0]?.trim();
+			if (!pair) continue;
+			const eq = pair.indexOf("=");
+			if (eq <= 0) continue;
+			const name = pair.slice(0, eq);
+			const value = pair.slice(eq + 1);
+			if (value) {
+				cookies.set(name, value);
+			} else {
+				cookies.delete(name);
+			}
+		}
+	}
+
+	return Array.from(cookies.entries())
+		.map(([name, value]) => `${name}=${value}`)
+		.join("; ");
+}
+
+function extractErrorMessage(payload: unknown, status: number): string {
+	if (!payload || typeof payload !== "object") return `HTTP ${status}`;
+	const record = payload as Record<string, unknown>;
+	const errorValue = record.error;
+	if (typeof errorValue === "string" && errorValue) return errorValue;
+	if (errorValue && typeof errorValue === "object") {
+		const message = (errorValue as Record<string, unknown>).message;
+		if (typeof message === "string" && message) return message;
+	}
+	const message = record.message;
+	if (typeof message === "string" && message) return message;
+	return `HTTP ${status}`;
+}
+
+function toAuthSession(value: unknown): AuthSession | null {
+	if (!value || typeof value !== "object") return null;
+	const record = value as Record<string, unknown>;
+	const nested = record.data;
+	if (nested && typeof nested === "object") return toAuthSession(nested);
+
+	const sessionValue = record.session;
+	const userValue = record.user;
+	if (!sessionValue || typeof sessionValue !== "object") return null;
+	if (!userValue || typeof userValue !== "object") return null;
+
+	const session = sessionValue as Record<string, unknown>;
+	const user = userValue as Record<string, unknown>;
+	if (typeof session.id !== "string" || typeof session.userId !== "string") {
+		return null;
+	}
+	if (typeof user.id !== "string") return null;
+
+	return {
+		session: {
+			id: session.id,
+			userId: session.userId,
+		},
+		user: {
+			id: user.id,
+			email: typeof user.email === "string" ? user.email : null,
+			name: typeof user.name === "string" ? user.name : null,
+		},
+	};
+}
+
 // ── Client ─────────────────────────────────────────────────────────
 
 export class PaperclipApi {
-	constructor(
-		private baseUrl: string,
-		private apiKey?: string,
-	) {}
+	private config: PaperclipApiConfig;
 
-	updateConfig(baseUrl: string, apiKey?: string) {
-		this.baseUrl = baseUrl.replace(/\/+$/, "");
-		this.apiKey = apiKey;
+	constructor(config: PaperclipApiConfig) {
+		this.config = {
+			...config,
+			baseUrl: sanitizeBaseUrl(config.baseUrl),
+		};
+	}
+
+	updateConfig(config: PaperclipApiConfig) {
+		this.config = {
+			...config,
+			baseUrl: sanitizeBaseUrl(config.baseUrl),
+		};
+	}
+
+	getSessionCookie(): string {
+		return this.config.sessionCookie;
+	}
+
+	private buildHeaders(
+		options?: Pick<RequestOptions, "headers" | "skipConfiguredAuth" | "sessionCookieOverride">,
+	): Record<string, string> {
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+			...(options?.headers ?? {}),
+		};
+
+		if (options?.skipConfiguredAuth) return headers;
+
+		if (this.config.authMode === "bearer" && this.config.apiKey) {
+			headers["Authorization"] = `Bearer ${this.config.apiKey}`;
+		}
+
+		if (
+			this.config.authMode === "custom_header" &&
+			this.config.customAuthHeaderName &&
+			this.config.customAuthHeaderValue
+		) {
+			headers[this.config.customAuthHeaderName] =
+				this.config.customAuthHeaderValue;
+		}
+
+		const sessionCookie =
+			options?.sessionCookieOverride ?? this.config.sessionCookie;
+		if (this.config.authMode === "session" && sessionCookie) {
+			headers["Cookie"] = sessionCookie;
+		}
+
+		return headers;
+	}
+
+	private maybeUpdateSessionCookie(
+		path: string,
+		responseHeaders: Record<string, string>,
+	) {
+		if (
+			this.config.authMode !== "session" &&
+			!path.startsWith("/api/auth/")
+		) {
+			return;
+		}
+		const setCookie = getHeader(responseHeaders, "set-cookie");
+		if (!setCookie) return;
+		this.config.sessionCookie = mergeCookieHeader(
+			this.config.sessionCookie,
+			setCookie,
+		);
+	}
+
+	private async requestRaw(
+		method: string,
+		path: string,
+		options?: RequestOptions,
+	): Promise<RequestUrlResponse> {
+		const params: RequestUrlParam = {
+			url: `${this.config.baseUrl}${path}`,
+			method,
+			headers: this.buildHeaders(options),
+			throw: false,
+		};
+		if (options?.body) {
+			const clean: Record<string, unknown> = {};
+			for (const [key, value] of Object.entries(options.body)) {
+				if (value !== undefined) clean[key] = value;
+			}
+			params.body = JSON.stringify(clean);
+		}
+
+		const response = await requestUrl(params);
+		this.maybeUpdateSessionCookie(path, response.headers);
+		return response;
 	}
 
 	private async request<T>(
@@ -121,36 +360,61 @@ export class PaperclipApi {
 		path: string,
 		body?: Record<string, unknown>,
 	): Promise<T> {
-		const url = `${this.baseUrl}${path}`;
-		const headers: Record<string, string> = {
-			"Content-Type": "application/json",
-		};
-		if (this.apiKey) {
-			headers["Authorization"] = `Bearer ${this.apiKey}`;
-		}
-		const params: RequestUrlParam = {
-			url,
-			method,
-			headers,
-			throw: false,
-		};
-		if (body) {
-			// Strip undefined values; keep explicit nulls only for fields that need clearing
-			const clean: Record<string, unknown> = {};
-			for (const [k, v] of Object.entries(body)) {
-				if (v !== undefined) clean[k] = v;
-			}
-			params.body = JSON.stringify(clean);
-		}
-		const resp = await requestUrl(params);
+		const resp = await this.requestRaw(method, path, { body });
 		if (resp.status >= 400) {
-			const msg =
-				resp.json?.error ||
-				resp.json?.message ||
-				`HTTP ${resp.status}`;
-			throw new Error(msg);
+			if (
+				resp.status === 401 &&
+				this.config.authMode === "session" &&
+				!this.config.sessionCookie
+			) {
+				throw new Error("Sign in from plugin settings to access this server");
+			}
+			if (resp.status === 401 && this.config.authMode === "session") {
+				throw new Error("Session expired or unauthorized. Sign in again from plugin settings");
+			}
+			throw new Error(extractErrorMessage(resp.json, resp.status));
 		}
 		return resp.json as T;
+	}
+
+	// Auth
+	async getSession(): Promise<AuthSession | null> {
+		if (!this.config.sessionCookie) return null;
+		const resp = await this.requestRaw("GET", "/api/auth/get-session");
+		if (resp.status === 401) return null;
+		if (resp.status >= 400) {
+			throw new Error(extractErrorMessage(resp.json, resp.status));
+		}
+		return toAuthSession(resp.json);
+	}
+
+	async signInEmail(
+		email: string,
+		password: string,
+	): Promise<AuthSession> {
+		const resp = await this.requestRaw("POST", "/api/auth/sign-in/email", {
+			body: { email, password },
+			skipConfiguredAuth: true,
+		});
+		if (resp.status >= 400) {
+			throw new Error(extractErrorMessage(resp.json, resp.status));
+		}
+		const session = await this.getSession();
+		if (!session) {
+			throw new Error("Signed in, but no session cookie was stored");
+		}
+		return session;
+	}
+
+	async signOutSession(): Promise<void> {
+		if (!this.config.sessionCookie) return;
+		const resp = await this.requestRaw("POST", "/api/auth/sign-out", {
+			body: {},
+		});
+		if (resp.status >= 400 && resp.status !== 401) {
+			throw new Error(extractErrorMessage(resp.json, resp.status));
+		}
+		this.config.sessionCookie = "";
 	}
 
 	// Companies
@@ -166,8 +430,9 @@ export class PaperclipApi {
 	): Promise<Issue[]> {
 		const params = new URLSearchParams();
 		if (filters?.status) params.set("status", filters.status);
-		if (filters?.assigneeAgentId)
+		if (filters?.assigneeAgentId) {
 			params.set("assigneeAgentId", filters.assigneeAgentId);
+		}
 		if (filters?.projectId) params.set("projectId", filters.projectId);
 		if (filters?.q) params.set("q", filters.q);
 		const qs = params.toString();
