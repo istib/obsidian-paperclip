@@ -4,6 +4,7 @@
 	"description": "Obsidian plugin for Paperclip agent orchestration",
 	"main": "main.js",
 	"scripts": {
+		"delete:screenshot-demo": "node scripts/seed-screenshot-demo.mjs delete",
 		"seed:screenshot-demo": "node scripts/seed-screenshot-demo.mjs",
 		"dev": "node esbuild.config.mjs",
 		"build": "node esbuild.config.mjs production"

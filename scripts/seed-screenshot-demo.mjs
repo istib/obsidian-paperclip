@@ -193,6 +193,10 @@ async function listCompanies() {
 	return request("GET", "/api/companies");
 }
 
+async function deleteCompany(companyId) {
+	return request("DELETE", `/api/companies/${companyId}`);
+}
+
 async function createCompany() {
 	return request("POST", "/api/companies", {
 		name: DEMO_COMPANY_NAME,
@@ -367,7 +371,42 @@ async function ensureComments(issuesByTitle) {
 	}
 }
 
+async function deleteDemoCompanies() {
+	const companies = await listCompanies();
+	const matches = companies.filter((company) =>
+		company.name === DEMO_COMPANY_NAME ||
+		company.name.startsWith(`${DEMO_COMPANY_NAME} (`),
+	);
+
+	for (const company of matches) {
+		await deleteCompany(company.id);
+	}
+
+	console.log(
+		JSON.stringify(
+			{
+				deletedCompanyIds: matches.map((company) => company.id),
+				deletedCount: matches.length,
+				baseUrl,
+			},
+			null,
+			2,
+		),
+	);
+}
+
 async function main() {
+	const command = process.argv[2] ?? "seed";
+
+	if (command === "delete") {
+		await deleteDemoCompanies();
+		return;
+	}
+
+	if (command !== "seed") {
+		throw new Error(`Unknown command: ${command}`);
+	}
+
 	const company = await ensureCompany();
 	const projectsByName = await ensureProjects(company.id);
 	const agentsByName = await ensureAgents(company.id);
