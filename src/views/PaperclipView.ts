@@ -1,5 +1,6 @@
 import { ItemView, Menu, Notice, WorkspaceLeaf, setIcon, MarkdownRenderer, FileSystemAdapter } from "obsidian";
 import type PaperclipPlugin from "../main";
+import { PaperclipAuthError } from "../api";
 import type { Company, Issue, Agent, Comment, Project, CreateIssueData } from "../api";
 import {
 	FILE_EXT_RE as VAULT_FILE_EXT_RE,
@@ -67,6 +68,10 @@ export class PaperclipView extends ItemView {
 	private relatedIssues: Issue[] = [];
 	/** Path of the file whose related issues are currently loaded */
 	private relatedFilePath: string | null = null;
+	/** Prevent repeated auth notices during polling failures */
+	private authFailureNoticeShown = false;
+	/** Stop polling after an auth failure until a later successful load */
+	private autoRefreshPausedForAuthFailure = false;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -93,17 +98,21 @@ export class PaperclipView extends ItemView {
 	getSortBy(): SortBy { return this.sortBy; }
 	getIssues(): Issue[] { return this.issues; }
 
-	async syncContextFrom(other: PaperclipView): Promise<void> {
-		this.selectedCompanyId = other.getSelectedCompanyId();
-		this.selectedProjectId = other.getSelectedProjectId();
-		this.sortBy = other.getSortBy();
-		this.selectedIssue = null;
+	async refreshData(): Promise<void> {
 		if (!this.selectedCompanyId) return;
 		await this.loadAgents();
 		await this.loadProjects();
 		await this.loadIssues();
 		if (this.boardView) this.loadContributors();
 		this.render();
+	}
+
+	async syncContextFrom(other: PaperclipView): Promise<void> {
+		this.selectedCompanyId = other.getSelectedCompanyId();
+		this.selectedProjectId = other.getSelectedProjectId();
+		this.sortBy = other.getSortBy();
+		this.selectedIssue = null;
+		await this.refreshData();
 	}
 
 	/** Open the detail view for a specific issue */
@@ -196,11 +205,37 @@ export class PaperclipView extends ItemView {
 		target.style.removeProperty("--paperclip-company-accent");
 	}
 
+	private resetAuthFailureState(): void {
+		const shouldResumeAutoRefresh = this.autoRefreshPausedForAuthFailure;
+		this.authFailureNoticeShown = false;
+		this.autoRefreshPausedForAuthFailure = false;
+		if (shouldResumeAutoRefresh) {
+			this.startAutoRefresh();
+		}
+	}
+
+	private handleLoadError(resource: string, error: unknown): void {
+		if (error instanceof PaperclipAuthError) {
+			if (!this.authFailureNoticeShown) {
+				new Notice(`Paperclip: ${error.message}`, 10000);
+				this.authFailureNoticeShown = true;
+			}
+			if (!this.autoRefreshPausedForAuthFailure) {
+				this.autoRefreshPausedForAuthFailure = true;
+				this.stopAutoRefresh();
+			}
+			return;
+		}
+
+		new Notice(`Paperclip: failed to load ${resource} — ${String(error)}`);
+	}
+
 	// ── Data loading ───────────────────────────────────────────────
 
 	private async loadCompanies(): Promise<void> {
 		try {
 			this.companies = await this.plugin.api.listCompanies();
+			this.resetAuthFailureState();
 			this.normalizeSelectedCompanyId();
 			if (this.selectedCompanyId) {
 				await this.loadAgents();
@@ -208,8 +243,8 @@ export class PaperclipView extends ItemView {
 				await this.loadIssues();
 				if (this.boardView) this.loadContributors();
 			}
-	} catch (e) {
-			new Notice(`Paperclip: failed to load companies — ${String(e)}`);
+		} catch (e) {
+			this.handleLoadError("companies", e);
 		}
 	}
 
@@ -235,8 +270,8 @@ export class PaperclipView extends ItemView {
 		}
 	}
 
-	private async loadIssues(): Promise<void> {
-		if (!this.selectedCompanyId) return;
+	private async loadIssues(): Promise<boolean> {
+		if (!this.selectedCompanyId) return false;
 		try {
 			const statusMap: Record<StatusFilter, string | undefined> = {
 				active: "backlog,todo,in_progress,blocked,in_review",
@@ -250,9 +285,12 @@ export class PaperclipView extends ItemView {
 					projectId: this.selectedProjectId || undefined,
 				},
 			);
+			this.resetAuthFailureState();
+			return true;
 		} catch (e) {
-			new Notice(`Paperclip: failed to load issues — ${String(e)}`);
+			this.handleLoadError("issues", e);
 			this.issues = [];
+			return false;
 		}
 	}
 
@@ -400,7 +438,8 @@ export class PaperclipView extends ItemView {
 
 	private async doRefresh(): Promise<void> {
 		this.snapshotRunning();
-		await this.loadIssues();
+		const loadedIssues = await this.loadIssues();
+		if (!loadedIssues) return;
 		if (this.boardView) this.loadContributors();
 		this.detectFinishedRuns();
 		if (this.selectedIssue) {
@@ -603,7 +642,8 @@ export class PaperclipView extends ItemView {
 		});
 		setIcon(refreshBtn, "refresh-cw");
 		refreshBtn.addEventListener("click", () => {
-			void this.loadIssues().then(() => {
+			void this.loadIssues().then((loadedIssues) => {
+				if (!loadedIssues) return;
 				if (this.boardView) this.loadContributors();
 				this.render();
 				new Notice("Paperclip: refreshed");
@@ -1080,7 +1120,8 @@ export class PaperclipView extends ItemView {
 		});
 		setIcon(refreshBtn, "refresh-cw");
 		refreshBtn.addEventListener("click", () => {
-			void this.loadIssues().then(async () => {
+			void this.loadIssues().then(async (loadedIssues) => {
+				if (!loadedIssues) return;
 				const updated = this.issues.find((i) => i.id === issue.id);
 				if (updated) this.selectedIssue = updated;
 				await this.loadComments(issue.id);
@@ -1785,8 +1826,7 @@ export class PaperclipView extends ItemView {
 						await this.loadProjects();
 					}
 					new Notice("Issue created");
-					await this.loadIssues();
-					this.render();
+					await this.plugin.refreshOpenPaperclipViews(result.companyId);
 			} catch (e) {
 				new Notice(`Failed to create issue: ${String(e)}`);
 			}

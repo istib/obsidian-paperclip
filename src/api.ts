@@ -1,8 +1,7 @@
 import { requestUrl, RequestUrlParam, RequestUrlResponse } from "obsidian";
+import type { AuthMode } from "./auth";
 
 // ── Types ──────────────────────────────────────────────────────────
-
-export type AuthMode = "none" | "bearer" | "session" | "custom_header";
 
 export interface PaperclipApiConfig {
 	baseUrl: string;
@@ -133,6 +132,15 @@ interface RequestOptions {
 	sessionCookieOverride?: string;
 }
 
+export class PaperclipAuthError extends Error {
+	readonly status = 401;
+
+	constructor(message: string) {
+		super(message);
+		this.name = "PaperclipAuthError";
+	}
+}
+
 function sanitizeBaseUrl(baseUrl: string): string {
 	return baseUrl.replace(/\/+$/, "");
 }
@@ -225,6 +233,13 @@ function extractErrorMessage(payload: unknown, status: number): string {
 	const message = record.message;
 	if (typeof message === "string" && message) return message;
 	return `HTTP ${status}`;
+}
+
+function joinAuthMessage(baseMessage: string, serverMessage: string): string {
+	if (!serverMessage || serverMessage === "HTTP 401" || serverMessage === baseMessage) {
+		return baseMessage;
+	}
+	return `${baseMessage} (${serverMessage})`;
 }
 
 function toAuthSession(value: unknown): AuthSession | null {
@@ -362,15 +377,46 @@ export class PaperclipApi {
 	): Promise<T> {
 		const resp = await this.requestRaw(method, path, { body });
 		if (resp.status >= 400) {
-			if (
-				resp.status === 401 &&
-				this.config.authMode === "session" &&
-				!this.config.sessionCookie
-			) {
-				throw new Error("Sign in from plugin settings to access this server");
-			}
-			if (resp.status === 401 && this.config.authMode === "session") {
-				throw new Error("Session expired or unauthorized. Sign in again from plugin settings");
+			if (resp.status === 401) {
+				const serverMessage = extractErrorMessage(resp.json, resp.status);
+				if (this.config.authMode === "session" && !this.config.sessionCookie) {
+					throw new PaperclipAuthError(
+						joinAuthMessage(
+							"Sign in from plugin settings to access this server",
+							serverMessage,
+						),
+					);
+				}
+				if (this.config.authMode === "session") {
+					throw new PaperclipAuthError(
+						joinAuthMessage(
+							"Session expired or unauthorized. Sign in again from plugin settings",
+							serverMessage,
+						),
+					);
+				}
+				if (this.config.authMode === "bearer") {
+					throw new PaperclipAuthError(
+						joinAuthMessage(
+							"Bearer token missing or unauthorized. Update Paperclip auth settings",
+							serverMessage,
+						),
+					);
+				}
+				if (this.config.authMode === "custom_header") {
+					throw new PaperclipAuthError(
+						joinAuthMessage(
+							"Custom auth header missing or unauthorized. Update Paperclip auth settings",
+							serverMessage,
+						),
+					);
+				}
+				throw new PaperclipAuthError(
+					joinAuthMessage(
+						"Server requires authentication. Update Paperclip auth mode in plugin settings",
+						serverMessage,
+					),
+				);
 			}
 			throw new Error(extractErrorMessage(resp.json, resp.status));
 		}

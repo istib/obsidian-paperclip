@@ -1,14 +1,21 @@
 import { Notice, Plugin, requestUrl } from "obsidian";
 import { PaperclipApi } from "./api";
 import {
-	PaperclipSettings,
 	DEFAULT_SETTINGS,
-	PaperclipSettingTab,
-} from "./settings";
+	migratePaperclipSettings,
+	serializePaperclipSettings,
+	type PaperclipSettings,
+} from "./settings-data";
+import { PaperclipSettingTab } from "./settings";
 import { PaperclipView, VIEW_TYPE, BOARD_VIEW_TYPE } from "./views/PaperclipView";
 import { CreateIssueModal } from "./views/CreateIssueModal";
 import { SearchIssueModal } from "./views/SearchIssueModal";
 import type { Agent, Company, Project } from "./api";
+import {
+	AiSuggestionService,
+	createAiBackendRegistry,
+	validateAiSettings,
+} from "./ai";
 
 export default class PaperclipPlugin extends Plugin {
 	settings: PaperclipSettings = DEFAULT_SETTINGS;
@@ -20,6 +27,9 @@ export default class PaperclipPlugin extends Plugin {
 		customAuthHeaderName: DEFAULT_SETTINGS.customAuthHeaderName,
 		customAuthHeaderValue: DEFAULT_SETTINGS.customAuthHeaderValue,
 	});
+	private readonly aiSuggestionService = new AiSuggestionService(
+		createAiBackendRegistry(requestUrl),
+	);
 
 	private resolveCompanyId(companies: Company[]): string {
 		if (companies.length === 0) return "";
@@ -151,20 +161,34 @@ export default class PaperclipPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const loaded = await this.loadData();
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-
-		if (
-			loaded &&
-			typeof loaded === "object" &&
-			!("authMode" in (loaded as Record<string, unknown>))
-		) {
-			this.settings.authMode = this.settings.apiKey ? "bearer" : "none";
-		}
+		this.settings = migratePaperclipSettings(loaded);
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		await this.saveData(serializePaperclipSettings(this.settings));
 		this.api.updateConfig(this.buildApiConfig());
+	}
+
+	async testAiProvider(): Promise<void> {
+		const validationError = validateAiSettings(this.settings.ai);
+		if (validationError) {
+			throw new Error(validationError);
+		}
+		await this.aiSuggestionService.testProvider(this.settings.ai);
+	}
+
+	async refreshOpenPaperclipViews(companyId?: string): Promise<void> {
+		const leaves = [
+			...this.app.workspace.getLeavesOfType(VIEW_TYPE),
+			...this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE),
+		];
+
+		for (const leaf of leaves) {
+			const view = leaf.view;
+			if (!(view instanceof PaperclipView)) continue;
+			if (companyId && view.getSelectedCompanyId() !== companyId) continue;
+			await view.refreshData();
+		}
 	}
 
 	getSessionStatusLabel(): string {
@@ -278,6 +302,7 @@ export default class PaperclipPlugin extends Plugin {
 							await this.api.updateIssue(created.id, { assigneeUserId: "local-board" });
 						}
 						new Notice("Issue created");
+						await this.refreshOpenPaperclipViews(result.companyId);
 				} catch (e) {
 					new Notice(`Failed to create issue: ${String(e)}`);
 				}
@@ -292,9 +317,9 @@ export default class PaperclipPlugin extends Plugin {
 		selection: string,
 		intent: "work" | "review" | "auto" = "auto",
 	): Promise<void> {
-		const openaiKey = this.settings.openaiApiKey;
-		if (!openaiKey) {
-			new Notice("Set your AI key in plugin settings first");
+		const validationError = validateAiSettings(this.settings.ai);
+		if (validationError) {
+			new Notice(validationError);
 			return;
 		}
 
@@ -339,23 +364,7 @@ export default class PaperclipPlugin extends Plugin {
 				}
 			}
 
-			// Build agent + project lists for the LLM
-			const agentList = agents
-				.map((a) => `- ${a.name} (${a.role}): ${a.capabilities || "general"}`)
-				.join("\n");
-			const projectList = projects
-				.filter((p) => !p.archivedAt)
-				.map((p) => `- ${p.name}`)
-				.join("\n");
-
-		const hasSelection = !!selection;
-
-			// Derive review output path
-			const dotIdx = filePath.lastIndexOf(".");
-			const reviewPath =
-				dotIdx > 0
-					? `${filePath.slice(0, dotIdx)} - Review${filePath.slice(dotIdx)}`
-					: `${filePath} - Review`;
+			const hasSelection = !!selection;
 
 			const noticeMsg: Record<string, string> = {
 				work: hasSelection ? "Creating issue from selection…" : "Creating issue from document…",
@@ -364,59 +373,22 @@ export default class PaperclipPlugin extends Plugin {
 			};
 			new Notice(noticeMsg[intent]);
 
-			const userContent = hasSelection
-				? `## Selected text\n${selection}\n\n## Full file (${filePath})\n${fileContent.slice(0, 12000)}`
-				: `## Full document (${filePath})\n${fileContent.slice(0, 12000)}`;
-
-			const intentPrompts: Record<string, string> = {
-				work: hasSelection
-					? `You create actionable Paperclip issues from highlighted text. Focus on the selection but use the full file for context. The issue should describe concrete work to be done.`
-					: `You create actionable Paperclip issues from documents. Analyze the document and create an issue for the most important work that needs to be done based on its content (implementation, follow-up, next steps, etc).`,
-				review: `You create Paperclip review issues. The user wants a thorough review of this document. The review should be written into a new file at \`${reviewPath}\`. Include in the description: what to review, what to look for, and where to write the output.`,
-				auto: `You analyze documents and create the most appropriate Paperclip issue. Determine whether the document needs: follow-up work, a review, implementation, or something else. Then create the best-fit issue. If it looks like meeting notes or a report, create follow-up actions. If it looks like a spec or plan, create implementation tasks. If it looks like a draft, suggest a review.`,
-			};
-
-			const resp = await requestUrl({
-				url: "https://api.openai.com/v1/chat/completions",
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${openaiKey}`,
+			const parsed = await this.aiSuggestionService.suggestIssue(
+				this.settings.ai,
+				{
+					intent,
+					selection,
+					filePath,
+					fileContent,
+					agents: agents.map((agent) => ({
+						name: agent.name,
+						role: agent.role,
+						capabilities: agent.capabilities,
+					})),
+					projects: projects
+						.filter((project) => !project.archivedAt)
+						.map((project) => ({ name: project.name })),
 				},
-				body: JSON.stringify({
-					model: "gpt-4o-mini",
-					temperature: 0.3,
-					response_format: { type: "json_object" },
-					messages: [
-						{
-							role: "system",
-							content: `${intentPrompts[intent]}
-
-Return JSON with:
-- "title": concise issue title (max 80 chars)
-- "description": markdown description with clear acceptance criteria. Reference the source file.
-- "priority": one of "critical", "high", "medium", "low"
-- "assignee": the exact name of the best-fit agent from the list below, or null
-- "project": the exact name of the best-fit project from the list below, or null
-
-Available agents:
-${agentList}
-
-Available projects:
-${projectList}
-
-File: ${filePath}`,
-						},
-						{
-							role: "user",
-							content: userContent,
-						},
-					],
-				}),
-			});
-
-			const parsed = JSON.parse(
-				resp.json.choices[0].message.content,
 			);
 
 			// Resolve agent name to ID
@@ -460,6 +432,7 @@ File: ${filePath}`,
 							await this.api.updateIssue(created.id, { assigneeUserId: "local-board" });
 						}
 						new Notice("Issue created");
+						await this.refreshOpenPaperclipViews(result.companyId);
 				} catch (e) {
 					new Notice(`Failed to create issue: ${String(e)}`);
 				}

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+- Configurable AI provider presets for OpenAI, OpenAI-compatible gateways, and custom compatible endpoints
+- AI provider settings for custom base URLs, model names, extra headers, and in-app provider connection testing
+- Lightweight unit coverage for AI settings migration and compatible request/response handling
+
+### Changed
+- Replace the hardcoded OpenAI issue-drafting integration with an internal AI backend service and provider registry
+- Migrate legacy OpenAI-only settings to the new AI provider configuration automatically
+- Update README and settings copy to describe AI providers rather than an OpenAI-only API key
+
 ## 0.4.3
 
 ### Added

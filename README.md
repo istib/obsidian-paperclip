@@ -43,7 +43,7 @@ Paperclip is an agent orchestration platform that manages autonomous AI agents t
 
 ### AI-powered actions (optional)
 
-- **Create issue from selection** — highlight text, right-click, and let GPT-4o-mini draft an issue with a suggested title, description, priority, agent, and project.
+- **Create issue from selection** — highlight text, right-click, and let your configured AI provider draft an issue with a suggested title, description, priority, agent, and project.
 - **Work on this document** — analyze the active note and create a follow-up task.
 - **Review this document** — request an AI-driven review of the active note.
 - **Smart action** — automatically determines the best action based on selected text or document content.
@@ -95,7 +95,7 @@ Open **Settings → Paperclip** to configure:
 | **Session email / password** | Better Auth login for `authenticated` deployments; password is used only for sign-in and is not saved | _(empty)_ |
 | **Custom header** | Header name/value pair for reverse-proxy auth setups | _(empty)_ |
 | **Default company ID** | Pre-select a company on open; leave empty to show a selector | _(empty)_ |
-| **OpenAI API key** | Required only for AI-powered issue creation features | _(empty)_ |
+| **AI provider** | Configure the preset, base URL, model, API key, extra headers, and a test request for AI-powered issue creation | `OpenAI / https://api.openai.com/v1 / gpt-4o-mini` |
 | **Refresh interval** | Auto-refresh polling interval in seconds (0 to disable) | `60` |
 
 ### Auth modes
@@ -104,6 +104,13 @@ Open **Settings → Paperclip** to configure:
 - **Bearer token** — for board API tokens or other bearer-token setups.
 - **Paperclip session** — signs into `/api/auth/sign-in/email` and stores the Better Auth session cookie for future API calls.
 - **Custom header** — sends a user-defined header/value pair on every request, useful behind auth proxies.
+
+### AI provider support
+
+- The plugin currently supports **OpenAI-compatible chat completions endpoints**.
+- Built-in presets cover **OpenAI**, a **compatible gateway** pattern for tools like LiteLLM, and a **custom compatible** option.
+- You can override the base URL, choose any compatible model name, add optional extra headers, and test the provider from settings before using AI actions.
+- Non-compatible vendor-specific request or response schemas are intentionally out of scope for this version.
 
 ## Usage
 
@@ -142,7 +149,7 @@ When editing a note, quickly jump to the Paperclip issue associated with that fi
 
 - **Obsidian** v1.0.0 or later.
 - A running **Paperclip** server (local or remote).
-- _(Optional)_ An **OpenAI API key** for AI-powered features.
+- _(Optional)_ An **OpenAI-compatible AI provider** for AI-powered features.
 
 ## Network usage disclosure
 
@@ -150,7 +157,7 @@ This plugin makes network requests to two services:
 
 1. **Paperclip API** — Your self-hosted or remote Paperclip server (configured via the API base URL setting). All issue data (titles, descriptions, comments, agent info) is fetched from and written to this server. If you enable session auth, the plugin also calls Paperclip's Better Auth endpoints under `/api/auth` to sign in, validate the session, and sign out. No data is sent to any third party through this connection.
 
-2. **OpenAI API** (`api.openai.com`) — Used **only** when you explicitly invoke an AI-powered command (Smart action, Work on document, Review document, or Create issue from selection). When triggered, the plugin sends the active document's content (up to 12,000 characters) and your selected text to OpenAI's `gpt-4o-mini` model to generate a suggested issue. This feature is entirely optional and requires you to provide your own OpenAI API key. No data is sent to OpenAI unless you actively trigger one of these commands.
+2. **Configured AI provider** — Used **only** when you explicitly invoke an AI-powered command (Smart action, Work on document, Review document, or Create issue from selection). By default this is OpenAI, but you can point the plugin at any OpenAI-compatible endpoint, including self-hosted or gateway deployments. When triggered, the plugin sends the active document's content (up to 12,000 characters) and your selected text to the configured provider's chat completions API to generate a suggested issue. This feature is entirely optional and requires you to configure your own provider credentials. No data is sent to an AI provider unless you actively trigger one of these commands.
 
 **No telemetry, analytics, or tracking of any kind is collected by this plugin.**
 

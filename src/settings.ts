@@ -1,34 +1,11 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type PaperclipPlugin from "./main";
-import type { AuthMode } from "./api";
-
-export interface PaperclipSettings {
-	apiBaseUrl: string;
-	authMode: AuthMode;
-	apiKey: string;
-	sessionCookie: string;
-	sessionEmail: string;
-	sessionUserDisplay: string;
-	customAuthHeaderName: string;
-	customAuthHeaderValue: string;
-	defaultCompanyId: string;
-	refreshIntervalSec: number;
-	openaiApiKey: string;
-}
-
-export const DEFAULT_SETTINGS: PaperclipSettings = {
-	apiBaseUrl: "http://localhost:3100",
-	authMode: "none",
-	apiKey: "",
-	sessionCookie: "",
-	sessionEmail: "",
-	sessionUserDisplay: "",
-	customAuthHeaderName: "",
-	customAuthHeaderValue: "",
-	defaultCompanyId: "",
-	refreshIntervalSec: 60,
-	openaiApiKey: "",
-};
+import type { AuthMode } from "./auth";
+import {
+	AI_PROVIDER_LABELS,
+	applyAiProviderPreset,
+	type AiProviderId,
+} from "./ai";
 
 const AUTH_MODE_OPTIONS: Record<AuthMode, string> = {
 	none: "No auth (local_trusted)",
@@ -219,17 +196,143 @@ export class PaperclipSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		containerEl.createEl("h3", { text: "AI provider" });
+
 		new Setting(containerEl)
-			.setName("AI key")
-			.setDesc("For AI-powered issue creation from selected text")
+			.setName("Provider preset")
+			.setDesc(
+				"Choose the AI provider used for Smart action, Work on document, and Review document.",
+			)
+			.addDropdown((dropdown) => {
+				for (const [value, label] of Object.entries(AI_PROVIDER_LABELS)) {
+					dropdown.addOption(value, label);
+				}
+				dropdown.setValue(this.plugin.settings.ai.providerId);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.ai = applyAiProviderPreset(
+						this.plugin.settings.ai,
+						value as AiProviderId,
+					);
+					await this.plugin.saveSettings();
+					this.display();
+				});
+			});
+
+		if (this.plugin.settings.ai.providerId !== "openai") {
+			new Setting(containerEl)
+				.setName("Provider name")
+				.setDesc("Optional label for this compatible gateway or custom provider")
+				.addText((text) =>
+					text
+						.setPlaceholder("Compatible gateway")
+						.setValue(this.plugin.settings.ai.customName)
+						.onChange(async (value) => {
+							this.plugin.settings.ai.customName = value;
+							await this.plugin.saveSettings();
+						}),
+				);
+		}
+
+		new Setting(containerEl)
+			.setName("Base URL")
+			.setDesc(
+				this.plugin.settings.ai.providerId === "openai"
+					? "OpenAI-compatible API base URL"
+					: "OpenAI-compatible API base URL, for example http://localhost:4000/v1",
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("Enter API key")
-					.setValue(this.plugin.settings.openaiApiKey)
+					.setPlaceholder("https://api.openai.com/v1")
+					.setValue(this.plugin.settings.ai.apiBaseUrl)
 					.onChange(async (value) => {
-						this.plugin.settings.openaiApiKey = value;
+						this.plugin.settings.ai.apiBaseUrl = value;
 						await this.plugin.saveSettings();
 					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Model")
+			.setDesc("Model name sent to the configured AI provider")
+			.addText((text) =>
+				text
+					.setPlaceholder("gpt-4o-mini")
+					.setValue(this.plugin.settings.ai.model)
+					.onChange(async (value) => {
+						this.plugin.settings.ai.model = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("API key")
+			.setDesc("Bearer token used for AI-powered issue creation")
+			.addText((text) => {
+				text.setPlaceholder("Enter AI provider API key");
+				text.setValue(this.plugin.settings.ai.apiKey);
+				text.inputEl.type = "password";
+				text.onChange(async (value) => {
+					this.plugin.settings.ai.apiKey = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		containerEl.createEl("h4", { text: "Extra headers" });
+		const extraHeaders = this.plugin.settings.ai.extraHeaders;
+		if (extraHeaders.length === 0) {
+			containerEl.createEl("p", {
+				text: "No extra headers configured.",
+				cls: "setting-item-description",
+			});
+		}
+		extraHeaders.forEach((header, index) => {
+			new Setting(containerEl)
+				.setName(`Header ${index + 1}`)
+				.addText((text) =>
+					text
+						.setPlaceholder("Header name")
+						.setValue(header.name)
+						.onChange(async (value) => {
+							this.plugin.settings.ai.extraHeaders[index].name = value;
+							await this.plugin.saveSettings();
+						}),
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Header value")
+						.setValue(header.value)
+						.onChange(async (value) => {
+							this.plugin.settings.ai.extraHeaders[index].value = value;
+							await this.plugin.saveSettings();
+						}),
+				)
+				.addButton((button) =>
+					button.setButtonText("Remove").onClick(async () => {
+						this.plugin.settings.ai.extraHeaders.splice(index, 1);
+						await this.plugin.saveSettings();
+						this.display();
+					}),
+				);
+		});
+
+		new Setting(containerEl)
+			.setName("Header actions")
+			.setDesc("Optional headers for compatible gateways or proxy setups")
+			.addButton((button) =>
+				button.setButtonText("Add header").onClick(async () => {
+					this.plugin.settings.ai.extraHeaders.push({ name: "", value: "" });
+					await this.plugin.saveSettings();
+					this.display();
+				}),
+			)
+			.addButton((button) =>
+				button.setButtonText("Test provider").setCta().onClick(async () => {
+					try {
+						await this.plugin.testAiProvider();
+						new Notice("AI provider test succeeded");
+					} catch (error) {
+						new Notice(`AI provider test failed: ${String(error)}`);
+					}
+				}),
 			);
 
 		new Setting(containerEl)
