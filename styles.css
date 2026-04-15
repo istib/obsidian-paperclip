@@ -1,4 +1,9 @@
 /* ── Search modal ───────────────────────────────────────────── */
+.paperclip-container,
+.paperclip-create-modal {
+	--paperclip-company-accent: var(--interactive-accent);
+}
+
 .paperclip-search-suggestion {
 	display: flex;
 	align-items: center;
@@ -75,6 +80,23 @@
 .paperclip-company-select {
 	flex: 1 1 auto;
 	min-width: 120px;
+}
+
+.paperclip-company-select {
+	border-color: color-mix(in srgb, var(--paperclip-company-accent) 50%, var(--background-modifier-border));
+	background-color: color-mix(in srgb, var(--paperclip-company-accent) 10%, var(--background-primary));
+}
+
+.paperclip-company-select:hover {
+	border-color: var(--paperclip-company-accent);
+	background-color: color-mix(in srgb, var(--paperclip-company-accent) 14%, var(--background-primary));
+}
+
+.paperclip-company-select:focus,
+.paperclip-company-select:focus-visible {
+	border-color: var(--paperclip-company-accent);
+	box-shadow: 0 0 0 1px var(--paperclip-company-accent);
+	outline: none;
 }
 
 .paperclip-tabs {

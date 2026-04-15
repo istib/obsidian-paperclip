@@ -175,6 +175,27 @@ export class PaperclipView extends ItemView {
 		}
 	}
 
+	private getSelectedCompany(): Company | null {
+		return this.companies.find((company) => company.id === this.selectedCompanyId) ?? null;
+	}
+
+	private getSelectedCompanyAccent(): string | null {
+		const brandColor = this.getSelectedCompany()?.brandColor?.trim();
+		if (!brandColor) return null;
+		if (typeof CSS !== "undefined" && !CSS.supports("color", brandColor)) return null;
+		return brandColor;
+	}
+
+	private applyCompanyTheme(target: HTMLElement): void {
+		const brandColor = this.getSelectedCompanyAccent();
+		if (brandColor) {
+			target.style.setProperty("--paperclip-company-accent", brandColor);
+			return;
+		}
+
+		target.style.removeProperty("--paperclip-company-accent");
+	}
+
 	// ── Data loading ───────────────────────────────────────────────
 
 	private async loadCompanies(): Promise<void> {
@@ -427,6 +448,7 @@ export class PaperclipView extends ItemView {
 		container.addClass("paperclip-container");
 		container.toggleClass("paperclip-container-board", this.boardView);
 		container.toggleClass("paperclip-container-browser", !this.boardView);
+		this.applyCompanyTheme(container);
 
 		if (this.selectedIssue) {
 			this.renderDetail(container);

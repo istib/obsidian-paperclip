@@ -103,10 +103,32 @@ export class CreateIssueModal extends Modal {
 		this.contentEl.empty();
 	}
 
+	private getSelectedCompany(): Company | null {
+		return this.companies.find((company) => company.id === this.selectedCompanyId) ?? null;
+	}
+
+	private getSelectedCompanyAccent(): string | null {
+		const brandColor = this.getSelectedCompany()?.brandColor?.trim();
+		if (!brandColor) return null;
+		if (typeof CSS !== "undefined" && !CSS.supports("color", brandColor)) return null;
+		return brandColor;
+	}
+
+	private applyCompanyTheme(): void {
+		const brandColor = this.getSelectedCompanyAccent();
+		if (brandColor) {
+			this.contentEl.style.setProperty("--paperclip-company-accent", brandColor);
+			return;
+		}
+
+		this.contentEl.style.removeProperty("--paperclip-company-accent");
+	}
+
 	private renderContent(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("paperclip-create-modal");
+		this.applyCompanyTheme();
 		contentEl.createEl("h3", { text: "Create paperclip issue" });
 
 		new Setting(contentEl)
@@ -158,6 +180,7 @@ export class CreateIssueModal extends Modal {
 			new Setting(contentEl)
 				.setName("Company")
 				.addDropdown((dd) => {
+					dd.selectEl.addClass("paperclip-company-select");
 					for (const company of this.companies) {
 						dd.addOption(company.id, company.name);
 					}
