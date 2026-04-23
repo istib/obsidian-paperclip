@@ -146,12 +146,19 @@ function sanitizeBaseUrl(baseUrl: string): string {
 }
 
 function getHeader(
-	headers: Record<string, string>,
+	headers: Record<string, string | string[]>,
 	name: string,
 ): string | undefined {
 	const needle = name.toLowerCase();
 	for (const [key, value] of Object.entries(headers)) {
-		if (key.toLowerCase() === needle) return value;
+		if (key.toLowerCase() !== needle) continue;
+		// Obsidian's requestUrl may return multi-value headers (e.g. set-cookie)
+		// as string[] on some platforms. Normalize to a single comma-joined string
+		// so downstream helpers can treat it as a string uniformly.
+		if (Array.isArray(value)) {
+			return value.length > 0 ? value.join(", ") : undefined;
+		}
+		return value;
 	}
 	return undefined;
 }
